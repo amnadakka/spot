@@ -10,6 +10,8 @@ import { GeofencingEventType } from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
 import { showGeofenceEnterNotification } from '../notifications/showGeofenceEnterNotification';
+import { appendHistoryEvent } from '../storage/history';
+import { loadGeofenceReminderMetadata } from '../storage/geofenceReminderTitles';
 
 export const GEOFENCING_TASK_NAME = 'REMINDER_GEOFENCING';
 
@@ -40,6 +42,18 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
 
     try {
       await showGeofenceEnterNotification(region.identifier);
+
+      if (region.identifier) {
+        const metadata = await loadGeofenceReminderMetadata();
+        const spot = metadata[region.identifier];
+        await appendHistoryEvent({
+          id: `${region.identifier}-${Date.now()}`,
+          reminderId: region.identifier,
+          spotTitle: spot?.title ?? 'Reminder',
+          address: spot?.address ?? `${region.latitude.toFixed(4)}, ${region.longitude.toFixed(4)}`,
+          triggeredAt: new Date().toISOString(),
+        });
+      }
     } catch (e) {
       console.warn('[Geofencing] Failed to show notification:', e);
     }

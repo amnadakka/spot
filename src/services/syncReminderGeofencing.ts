@@ -12,6 +12,7 @@ import type { Reminder } from '../types/reminder';
  * Replacing the list updates regions; an empty list stops monitoring.
  */
 export async function syncReminderGeofencing(reminders: Reminder[]): Promise<void> {
+  const activeReminders = reminders.filter((r) => r.enabled);
   await persistGeofenceReminderTitles(reminders);
 
   if (Platform.OS === 'web') {
@@ -19,7 +20,7 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
   }
 
   if (isExpoGoAndroid()) {
-    if (reminders.length > 0) {
+    if (activeReminders.length > 0) {
       console.warn(
         '[Geofencing] Expo Go on Android does not support background geofencing. Use a development build (expo.fyi/dev-client).',
       );
@@ -37,7 +38,7 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
 
   const background = await Location.getBackgroundPermissionsAsync();
   if (!background.granted) {
-    if (reminders.length > 0) {
+    if (activeReminders.length > 0) {
       console.warn(
         '[Geofencing] Background location not authorized; enable “Always” location for geofencing. Skipping region sync.',
       );
@@ -46,7 +47,7 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
   }
 
   try {
-    if (reminders.length === 0) {
+    if (activeReminders.length === 0) {
       const started = await Location.hasStartedGeofencingAsync(GEOFENCING_TASK_NAME);
       if (started) {
         await Location.stopGeofencingAsync(GEOFENCING_TASK_NAME);
@@ -54,7 +55,7 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
       return;
     }
 
-    const regions = reminders.map((r) => ({
+    const regions = activeReminders.map((r) => ({
       identifier: r.id,
       latitude: r.latitude,
       longitude: r.longitude,

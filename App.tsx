@@ -14,7 +14,7 @@ export default function App() {
   return (
     <>
       <HomeScreen />
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
     </>
   );
 }
