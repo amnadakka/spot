@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useBatteryOptimizationCheck } from './src/hooks/useBatteryOptimizationCheck';
 import { usePendingHistoryDrain } from './src/hooks/usePendingHistoryDrain';
@@ -24,9 +25,9 @@ export default function App() {
   });
 
   return (
-    <>
+    <SafeAreaProvider>
       <HomeScreen ref={homeRef} />
       <StatusBar style="dark" />
-    </>
+    </SafeAreaProvider>
   );
 }

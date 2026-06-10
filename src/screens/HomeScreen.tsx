@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useImperativeHandle, useState, forwardRef } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 
 import AddSpotForm from '../components/AddSpotForm';
 import AppHeader from '../components/AppHeader';
 import BottomNav, { type Tab } from '../components/BottomNav';
+import ScreenLayout from '../components/ScreenLayout';
 import EmptyState from '../components/EmptyState';
 import HistoryScreen from '../components/HistoryScreen';
+import HomeLiveMap from '../components/HomeLiveMap';
 import LocationBanner from '../components/LocationBanner';
 import MapPickerScreen, { type PickedLocation } from '../components/MapPickerScreen';
 import SpotDetailScreen from '../components/SpotDetailScreen';
@@ -15,7 +17,11 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { loadReminders, saveReminders } from '../storage/reminders';
 import { colors } from '../theme/colors';
 import type { Reminder } from '../types/reminder';
-import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
+import {
+  DEFAULT_REMINDER_RADIUS_METERS,
+  MAX_ACTIVE_SPOTS,
+  MAX_ACTIVE_SPOTS_MESSAGE,
+} from '../types/reminder';
 
 type Screen = 'home' | 'history' | 'map' | 'form' | 'detail';
 
@@ -98,11 +104,24 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   const handleToggle = useCallback((id: string) => {
-    setReminders((prev) =>
-      prev.map((reminder) =>
+    setReminders((prev) => {
+      const target = prev.find((reminder) => reminder.id === id);
+      if (!target) {
+        return prev;
+      }
+
+      if (!target.enabled) {
+        const activeCount = prev.filter((reminder) => reminder.enabled).length;
+        if (activeCount >= MAX_ACTIVE_SPOTS) {
+          Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+          return prev;
+        }
+      }
+
+      return prev.map((reminder) =>
         reminder.id === id ? { ...reminder, enabled: !reminder.enabled } : reminder,
-      ),
-    );
+      );
+    });
   }, []);
 
   const handleDelete = useCallback((id: string) => {
@@ -110,8 +129,13 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   const handleAdd = useCallback(() => {
+    const activeCount = reminders.filter((reminder) => reminder.enabled).length;
+    if (activeCount >= MAX_ACTIVE_SPOTS) {
+      Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+      return;
+    }
     setScreen('map');
-  }, []);
+  }, [reminders]);
 
   const handleLocationPicked = useCallback((location: PickedLocation) => {
     setPickedLocation(location);
@@ -121,6 +145,12 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const handleConfirm = useCallback(
     (title: string, description: string) => {
       if (!pickedLocation) {
+        return;
+      }
+
+      const activeCount = reminders.filter((reminder) => reminder.enabled).length;
+      if (activeCount >= MAX_ACTIVE_SPOTS) {
+        Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
         return;
       }
 
@@ -141,7 +171,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       setScreen('home');
       setActiveTab('home');
     },
-    [pickedLocation],
+    [pickedLocation, reminders],
   );
 
   const handleDiscard = useCallback(() => {
@@ -170,22 +200,25 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const showNav = screen === 'home' || screen === 'history';
   const showBack = screen === 'map' || screen === 'form' || screen === 'detail';
   const activeCount = reminders.filter((reminder) => reminder.enabled).length;
+  const atSpotLimit = activeCount >= MAX_ACTIVE_SPOTS;
 
   const headerSubtitle =
-    screen === 'home' && reminders.length > 0
-      ? `${activeCount} of ${reminders.length} active`
+    screen === 'home'
+      ? reminders.length > 0
+        ? `${activeCount} of ${reminders.length} active`
+        : `Up to ${MAX_ACTIVE_SPOTS} active spots`
       : undefined;
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingScreen}>
+      <ScreenLayout style={styles.loadingScreen}>
         <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
+      </ScreenLayout>
     );
   }
 
   return (
-    <SafeAreaView style={styles.root}>
+    <ScreenLayout bottomInsetHandledExternally={showNav}>
       <AppHeader
         title={screenTitles[screen]}
         subtitle={headerSubtitle}
@@ -197,18 +230,25 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       {screen === 'home' || screen === 'history' ? <LocationBanner status={locationStatus} /> : null}
 
       <View style={styles.content}>
-        {screen === 'home' &&
-          (reminders.length === 0 ? (
-            <EmptyState onCreateFirst={handleAdd} />
-          ) : (
-            <SpotList
-              reminders={reminders}
-              onToggle={handleToggle}
-              onDelete={handleDelete}
-              onAdd={handleAdd}
-              onSpotPress={navigateToSpotDetail}
-            />
-          ))}
+        {screen === 'home' ? (
+          <View style={styles.homeBody}>
+            <View style={styles.listArea}>
+              {reminders.length === 0 ? (
+                <EmptyState onCreateFirst={handleAdd} />
+              ) : (
+                <SpotList
+                  reminders={reminders}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onAdd={handleAdd}
+                  onSpotPress={navigateToSpotDetail}
+                  addDisabled={atSpotLimit}
+                />
+              )}
+            </View>
+            <HomeLiveMap reminders={reminders} />
+          </View>
+        ) : null}
 
         {screen === 'history' && (
           <HistoryScreen refreshKey={historyRefreshKey} onEventPress={navigateToSpotDetail} />
@@ -230,24 +270,25 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       </View>
 
       {showNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
-    </SafeAreaView>
+    </ScreenLayout>
   );
 });
 
 export default HomeScreen;
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   loadingScreen: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
   content: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  homeBody: {
+    flex: 1,
+  },
+  listArea: {
     flex: 1,
     overflow: 'hidden',
   },

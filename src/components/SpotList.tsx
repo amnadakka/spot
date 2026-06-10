@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
 import { radii, spacing } from '../theme/spacing';
+import { MAX_ACTIVE_SPOTS_MESSAGE } from '../types/reminder';
 import type { Reminder } from '../types/reminder';
 
 import Toggle from './ui/Toggle';
@@ -14,23 +15,37 @@ type SpotListProps = {
   onDelete: (id: string) => void;
   onAdd: () => void;
   onSpotPress: (id: string) => void;
+  addDisabled?: boolean;
 };
 
-export default function SpotList({ reminders, onToggle, onDelete, onAdd, onSpotPress }: SpotListProps) {
+export default function SpotList({
+  reminders,
+  onToggle,
+  onDelete,
+  onAdd,
+  onSpotPress,
+  addDisabled = false,
+}: SpotListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleFabPress = () => {
+    if (addDisabled) {
+      Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+      return;
+    }
+    onAdd();
+  };
 
   return (
     <View style={styles.container}>
       <FlatList
+        style={styles.list}
         data={reminders}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.card}
-            onPress={() => onSpotPress(item.id)}
-          >
+          <Pressable style={styles.card} onPress={() => onSpotPress(item.id)}>
             <View style={[styles.iconWrap, item.enabled ? styles.iconWrapActive : styles.iconWrapInactive]}>
               <Ionicons
                 name="location"
@@ -82,9 +97,14 @@ export default function SpotList({ reminders, onToggle, onDelete, onAdd, onSpotP
       />
 
       <Pressable
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        onPress={onAdd}
+        style={({ pressed }) => [
+          styles.fab,
+          addDisabled && styles.fabDisabled,
+          pressed && !addDisabled && styles.fabPressed,
+        ]}
+        onPress={handleFabPress}
         accessibilityLabel="Add new spot"
+        accessibilityState={{ disabled: addDisabled }}
       >
         <Ionicons name="add" size={28} color={colors.surface} />
       </Pressable>
@@ -96,10 +116,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  list: {
+    flex: 1,
+  },
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: 100,
+    paddingBottom: 88,
     gap: spacing.md,
   },
   card: {
@@ -193,7 +216,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.xl,
-    bottom: spacing.xl,
+    bottom: spacing.lg,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -205,6 +228,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 8,
+  },
+  fabDisabled: {
+    backgroundColor: colors.slate300,
+    shadowOpacity: 0.1,
   },
   fabPressed: {
     backgroundColor: colors.primaryDark,

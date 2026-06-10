@@ -14,3 +14,9 @@ export type Reminder = {
 export const DEFAULT_REMINDER_RADIUS_METERS = 100;
 
 export const MAX_DESCRIPTION_LENGTH = 100;
+
+/** Cap on simultaneously enabled geofence regions to protect background battery. */
+export const MAX_ACTIVE_SPOTS = 5;
+
+export const MAX_ACTIVE_SPOTS_MESSAGE =
+  'Maximum of 5 active spots allowed to optimize background battery performance.';

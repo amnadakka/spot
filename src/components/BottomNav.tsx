@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../theme/colors';
 import { radii, spacing } from '../theme/spacing';
@@ -12,8 +13,10 @@ type BottomNavProps = {
 };
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
       <NavItem
         label="Home"
         icon="home"
@@ -54,12 +57,12 @@ function NavItem({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    height: 72,
+    minHeight: 72,
     backgroundColor: colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
   },
   item: {
     flex: 1,
