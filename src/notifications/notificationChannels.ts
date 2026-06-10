@@ -11,8 +11,12 @@ export async function ensureGeofenceAndroidChannel(): Promise<void> {
 
   await Notifications.setNotificationChannelAsync(GEOFENCE_NOTIFICATION_CHANNEL_ID, {
     name: 'Location reminders',
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250],
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 100, 250],
     sound: 'default',
+    bypassDnd: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    enableLights: true,
+    enableVibrate: true,
   });
 }

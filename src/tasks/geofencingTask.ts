@@ -1,17 +1,17 @@
 /**
  * Geofencing background task — registered at app startup (see root `index.ts`).
  *
- * When iOS/Android detect an enter/exit on a monitored circular region, the OS may launch or wake
- * your app’s JS runtime. Expo TaskManager runs this callback **outside React** (no mounted tree).
- * That is why `TaskManager.defineTask` must live at module scope, not inside a component.
+ * CRITICAL DESIGN: The OS gives us a few seconds of background execution time.
+ * Android Doze / iOS Suspended will kill the JS runtime if we take too long.
+ * The notification MUST fire before any disk I/O. History logging is deferred
+ * to a lightweight queue that drains when the app returns to the foreground.
  */
 import type { LocationRegion } from 'expo-location';
 import { GeofencingEventType } from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
-import { showGeofenceEnterNotification } from '../notifications/showGeofenceEnterNotification';
-import { appendHistoryEvent } from '../storage/history';
-import { loadGeofenceReminderMetadata } from '../storage/geofenceReminderTitles';
+import { fireGeofenceNotificationImmediate } from '../notifications/showGeofenceEnterNotification';
+import { enqueuePendingHistoryEvent } from '../storage/pendingHistory';
 
 export const GEOFENCING_TASK_NAME = 'REMINDER_GEOFENCING';
 
@@ -32,30 +32,31 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
 
   const { eventType, region } = data;
 
-  if (eventType === GeofencingEventType.Enter) {
-    console.log('[Geofencing] Entered region', {
-      identifier: region.identifier,
+  if (eventType !== GeofencingEventType.Enter) {
+    return;
+  }
+
+  const regionId = region.identifier;
+
+  // 1. Fire notification IMMEDIATELY — zero disk reads before this call.
+  //    The notification content embeds the region identifier in `data` so the
+  //    foreground listener can reconcile history even if the title was generic.
+  try {
+    await fireGeofenceNotificationImmediate(regionId);
+  } catch (e) {
+    console.warn('[Geofencing] Notification failed:', e);
+  }
+
+  // 2. Enqueue a minimal history stub for the foreground drain.
+  //    This is a single small AsyncStorage write (~100 bytes), not a read-modify-write.
+  try {
+    enqueuePendingHistoryEvent({
+      regionId: regionId ?? 'unknown',
       latitude: region.latitude,
       longitude: region.longitude,
-      radiusMeters: region.radius,
+      triggeredAt: new Date().toISOString(),
     });
-
-    try {
-      await showGeofenceEnterNotification(region.identifier);
-
-      if (region.identifier) {
-        const metadata = await loadGeofenceReminderMetadata();
-        const spot = metadata[region.identifier];
-        await appendHistoryEvent({
-          id: `${region.identifier}-${Date.now()}`,
-          reminderId: region.identifier,
-          spotTitle: spot?.title ?? 'Reminder',
-          address: spot?.address ?? `${region.latitude.toFixed(4)}, ${region.longitude.toFixed(4)}`,
-          triggeredAt: new Date().toISOString(),
-        });
-      }
-    } catch (e) {
-      console.warn('[Geofencing] Failed to show notification:', e);
-    }
+  } catch {
+    // Non-critical — history will be missing this entry but the notification fired.
   }
 });

@@ -13,9 +13,10 @@ type SpotListProps = {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  onSpotPress: (id: string) => void;
 };
 
-export default function SpotList({ reminders, onToggle, onDelete, onAdd }: SpotListProps) {
+export default function SpotList({ reminders, onToggle, onDelete, onAdd, onSpotPress }: SpotListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   return (
@@ -26,7 +27,10 @@ export default function SpotList({ reminders, onToggle, onDelete, onAdd }: SpotL
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <Pressable
+            style={styles.card}
+            onPress={() => onSpotPress(item.id)}
+          >
             <View style={[styles.iconWrap, item.enabled ? styles.iconWrapActive : styles.iconWrapInactive]}>
               <Ionicons
                 name="location"
@@ -73,7 +77,7 @@ export default function SpotList({ reminders, onToggle, onDelete, onAdd }: SpotL
                 <Ionicons name="trash-outline" size={16} color={colors.slate300} />
               </Pressable>
             )}
-          </View>
+          </Pressable>
         )}
       />
 

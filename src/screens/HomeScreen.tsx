@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useState, forwardRef } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, View } from 'react-native';
 
 import AddSpotForm from '../components/AddSpotForm';
@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import HistoryScreen from '../components/HistoryScreen';
 import LocationBanner from '../components/LocationBanner';
 import MapPickerScreen, { type PickedLocation } from '../components/MapPickerScreen';
+import SpotDetailScreen from '../components/SpotDetailScreen';
 import SpotList from '../components/SpotList';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
 import { useUserLocation } from '../hooks/useUserLocation';
@@ -16,26 +17,33 @@ import { colors } from '../theme/colors';
 import type { Reminder } from '../types/reminder';
 import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
-type Screen = 'home' | 'history' | 'map' | 'form';
+type Screen = 'home' | 'history' | 'map' | 'form' | 'detail';
 
 const screenTitles: Record<Screen, string> = {
   home: 'Spots',
   history: 'History',
   map: 'New Spot',
   form: 'New Spot',
+  detail: 'Spot Details',
 };
 
 function makeReminderId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export default function HomeScreen() {
+export type HomeScreenHandle = {
+  navigateToSpotDetail: (reminderId: string) => void;
+};
+
+const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState<Screen>('home');
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
+  const [detailOrigin, setDetailOrigin] = useState<'home' | 'history'>('home');
 
   const locationStatus = useUserLocation();
   useReminderGeofencingSync(reminders);
@@ -62,9 +70,28 @@ export default function HomeScreen() {
     void saveReminders(reminders);
   }, [loading, reminders]);
 
+  const navigateToSpotDetail = useCallback(
+    (reminderId: string) => {
+      const found = reminders.find((r) => r.id === reminderId);
+      if (found) {
+        setDetailOrigin(screen === 'history' ? 'history' : 'home');
+        setSelectedReminder(found);
+        setScreen('detail');
+      }
+    },
+    [reminders, screen],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({ navigateToSpotDetail }),
+    [navigateToSpotDetail],
+  );
+
   const handleTabChange = useCallback((tab: Tab) => {
     setActiveTab(tab);
     setScreen(tab);
+    setSelectedReminder(null);
     if (tab === 'history') {
       setHistoryRefreshKey((key) => key + 1);
     }
@@ -129,12 +156,19 @@ export default function HomeScreen() {
       return;
     }
 
+    if (screen === 'detail') {
+      setSelectedReminder(null);
+      setScreen(detailOrigin);
+      setActiveTab(detailOrigin);
+      return;
+    }
+
     setScreen('home');
     setActiveTab('home');
   }, [screen]);
 
   const showNav = screen === 'home' || screen === 'history';
-  const showBack = screen === 'map' || screen === 'form';
+  const showBack = screen === 'map' || screen === 'form' || screen === 'detail';
   const activeCount = reminders.filter((reminder) => reminder.enabled).length;
 
   const headerSubtitle =
@@ -172,10 +206,13 @@ export default function HomeScreen() {
               onToggle={handleToggle}
               onDelete={handleDelete}
               onAdd={handleAdd}
+              onSpotPress={navigateToSpotDetail}
             />
           ))}
 
-        {screen === 'history' && <HistoryScreen refreshKey={historyRefreshKey} />}
+        {screen === 'history' && (
+          <HistoryScreen refreshKey={historyRefreshKey} onEventPress={navigateToSpotDetail} />
+        )}
 
         {screen === 'map' && <MapPickerScreen onLocationPicked={handleLocationPicked} />}
 
@@ -186,12 +223,18 @@ export default function HomeScreen() {
             onDiscard={handleDiscard}
           />
         ) : null}
+
+        {screen === 'detail' && selectedReminder ? (
+          <SpotDetailScreen reminder={selectedReminder} />
+        ) : null}
       </View>
 
       {showNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
     </SafeAreaView>
   );
-}
+});
+
+export default HomeScreen;
 
 const styles = StyleSheet.create({
   root: {

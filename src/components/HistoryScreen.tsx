@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { loadHistory } from '../storage/history';
 import { colors } from '../theme/colors';
@@ -10,9 +10,10 @@ import { timeAgo } from '../utils/timeAgo';
 
 type HistoryScreenProps = {
   refreshKey?: number;
+  onEventPress?: (reminderId: string) => void;
 };
 
-export default function HistoryScreen({ refreshKey = 0 }: HistoryScreenProps) {
+export default function HistoryScreen({ refreshKey = 0, onEventPress }: HistoryScreenProps) {
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +52,11 @@ export default function HistoryScreen({ refreshKey = 0 }: HistoryScreenProps) {
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
       renderItem={({ item }) => (
-        <View style={styles.card}>
+        <Pressable
+          style={styles.card}
+          onPress={() => onEventPress?.(item.reminderId)}
+          disabled={!onEventPress}
+        >
           <View style={styles.iconWrap}>
             <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           </View>
@@ -64,7 +69,7 @@ export default function HistoryScreen({ refreshKey = 0 }: HistoryScreenProps) {
             </Text>
           </View>
           <Text style={styles.time}>{timeAgo(item.triggeredAt)}</Text>
-        </View>
+        </Pressable>
       )}
     />
   );
