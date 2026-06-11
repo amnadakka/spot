@@ -16,6 +16,7 @@ type SpotListProps = {
   onAdd: () => void;
   onSpotPress: (id: string) => void;
   addDisabled?: boolean;
+  occupiedSpotIds?: Set<string>;
 };
 
 export default function SpotList({
@@ -25,6 +26,7 @@ export default function SpotList({
   onAdd,
   onSpotPress,
   addDisabled = false,
+  occupiedSpotIds,
 }: SpotListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -44,18 +46,40 @@ export default function SpotList({
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => onSpotPress(item.id)}>
-            <View style={[styles.iconWrap, item.enabled ? styles.iconWrapActive : styles.iconWrapInactive]}>
+        renderItem={({ item }) => {
+          const isOccupied = occupiedSpotIds?.has(item.id) ?? false;
+
+          return (
+          <Pressable
+            style={[styles.card, isOccupied && styles.cardOccupied]}
+            onPress={() => onSpotPress(item.id)}
+          >
+            <View
+              style={[
+                styles.iconWrap,
+                isOccupied
+                  ? styles.iconWrapOccupied
+                  : item.enabled
+                    ? styles.iconWrapActive
+                    : styles.iconWrapInactive,
+              ]}
+            >
               <Ionicons
                 name="location"
                 size={18}
-                color={item.enabled ? colors.primary : colors.slate300}
+                color={isOccupied ? colors.destructive : item.enabled ? colors.primary : colors.slate300}
               />
             </View>
 
             <View style={styles.info}>
-              <Text style={[styles.title, !item.enabled && styles.titleInactive]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.title,
+                  isOccupied && styles.titleOccupied,
+                  !item.enabled && !isOccupied && styles.titleInactive,
+                ]}
+                numberOfLines={1}
+              >
                 {item.title}
               </Text>
               <Text style={styles.address} numberOfLines={1}>
@@ -93,7 +117,8 @@ export default function SpotList({
               </Pressable>
             )}
           </Pressable>
-        )}
+          );
+        }}
       />
 
       <Pressable
@@ -141,6 +166,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  cardOccupied: {
+    backgroundColor: '#FEF2F2',
+    borderColor: colors.destructive,
+    borderWidth: 1.5,
+    shadowColor: colors.destructive,
+    shadowOpacity: 0.12,
+  },
   iconWrap: {
     width: 40,
     height: 40,
@@ -154,6 +186,9 @@ const styles = StyleSheet.create({
   iconWrapInactive: {
     backgroundColor: colors.slate50,
   },
+  iconWrapOccupied: {
+    backgroundColor: '#FEE2E2',
+  },
   info: {
     flex: 1,
     minWidth: 0,
@@ -165,6 +200,9 @@ const styles = StyleSheet.create({
   },
   titleInactive: {
     color: colors.slate400,
+  },
+  titleOccupied: {
+    color: colors.destructiveDark,
   },
   address: {
     fontSize: 12,

@@ -12,6 +12,8 @@ import LocationBanner from '../components/LocationBanner';
 import MapPickerScreen, { type PickedLocation } from '../components/MapPickerScreen';
 import SpotDetailScreen from '../components/SpotDetailScreen';
 import SpotList from '../components/SpotList';
+import { useLiveUserLocation } from '../hooks/useLiveUserLocation';
+import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { loadReminders, saveReminders } from '../storage/reminders';
@@ -52,6 +54,8 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const [detailOrigin, setDetailOrigin] = useState<'home' | 'history'>('home');
 
   const locationStatus = useUserLocation();
+  const liveUserLocation = useLiveUserLocation();
+  const occupiedSpotIds = useOccupiedSpotIds(reminders, liveUserLocation);
   useReminderGeofencingSync(reminders);
 
   useEffect(() => {
@@ -243,10 +247,15 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
                   onAdd={handleAdd}
                   onSpotPress={navigateToSpotDetail}
                   addDisabled={atSpotLimit}
+                  occupiedSpotIds={occupiedSpotIds}
                 />
               )}
             </View>
-            <HomeLiveMap reminders={reminders} />
+            <HomeLiveMap
+              reminders={reminders}
+              occupiedSpotIds={occupiedSpotIds}
+              userLocation={liveUserLocation}
+            />
           </View>
         ) : null}
 

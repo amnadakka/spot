@@ -61,7 +61,7 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
       longitude: r.longitude,
       radius: Math.max(r.radiusMeters, 1),
       notifyOnEnter: true,
-      notifyOnExit: false,
+      notifyOnExit: true,
     }));
 
     await Location.startGeofencingAsync(GEOFENCING_TASK_NAME, regions);

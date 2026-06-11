@@ -1,75 +1,52 @@
-import * as Location from 'expo-location';
-import { Accuracy } from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
 import { colors } from '../theme/colors';
 import type { Reminder } from '../types/reminder';
+import type { Coordinate } from '../utils/geo';
 
 const MAP_DELTA = 0.012;
 
 type HomeLiveMapProps = {
   reminders: Reminder[];
+  occupiedSpotIds: Set<string>;
+  userLocation: Coordinate | null;
 };
 
-export default function HomeLiveMap({ reminders }: HomeLiveMapProps) {
+export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }: HomeLiveMapProps) {
   const mapRef = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
-  const [region, setRegion] = useState<Region | null>(null);
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-    let cancelled = false;
-
-    async function startTracking() {
-      const servicesOn = await Location.hasServicesEnabledAsync();
-      if (!servicesOn || cancelled) {
-        return;
-      }
-
-      const permission = await Location.getForegroundPermissionsAsync();
-      if (!permission.granted || cancelled) {
-        return;
-      }
-
-      subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Accuracy.Balanced,
-          distanceInterval: 8,
-          timeInterval: 3000,
-        },
-        (position) => {
-          const next: Region = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            latitudeDelta: MAP_DELTA,
-            longitudeDelta: MAP_DELTA,
-          };
-          setRegion(next);
-          if (ready) {
-            mapRef.current?.animateToRegion(next, 400);
-          }
-        },
-      );
+    if (!ready || !userLocation) {
+      return;
     }
 
-    void startTracking();
-
-    return () => {
-      cancelled = true;
-      subscription?.remove();
+    const next: Region = {
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+      latitudeDelta: MAP_DELTA,
+      longitudeDelta: MAP_DELTA,
     };
-  }, [ready]);
+    mapRef.current?.animateToRegion(next, 400);
+  }, [ready, userLocation]);
 
   const activeReminders = reminders.filter((r) => r.enabled);
 
-  const initialRegion = region ?? {
-    latitude: 50.9375,
-    longitude: 6.9603,
-    latitudeDelta: MAP_DELTA,
-    longitudeDelta: MAP_DELTA,
-  };
+  const initialRegion = userLocation
+    ? {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: MAP_DELTA,
+        longitudeDelta: MAP_DELTA,
+      }
+    : {
+        latitude: 50.9375,
+        longitude: 6.9603,
+        latitudeDelta: MAP_DELTA,
+        longitudeDelta: MAP_DELTA,
+      };
 
   return (
     <View style={styles.container}>
@@ -95,7 +72,7 @@ export default function HomeLiveMap({ reminders }: HomeLiveMapProps) {
             }}
             title={reminder.title}
             description={reminder.address}
-            pinColor={colors.primaryDark}
+            pinColor={occupiedSpotIds.has(reminder.id) ? colors.destructive : colors.primaryDark}
           />
         ))}
       </MapView>
