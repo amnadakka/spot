@@ -5,10 +5,7 @@ import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
 import { drainPendingHistory } from '../storage/pendingHistory';
 
 /**
- * Drains the pending geofence-history queue whenever the app enters the foreground.
- *
- * Background task enqueues lightweight stubs; this hook promotes them to full
- * HistoryEvent records (with metadata from AsyncStorage) at the first safe moment.
+ * Drains any legacy pending geofence-history stubs when the app enters the foreground.
  */
 export function usePendingHistoryDrain(): void {
   const draining = useRef(false);

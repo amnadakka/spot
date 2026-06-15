@@ -10,12 +10,18 @@ import { timeAgo } from '../utils/timeAgo';
 
 type HistoryScreenProps = {
   refreshKey?: number;
-  onEventPress?: (reminderId: string) => void;
+  onEventPress?: (event: HistoryEvent) => void;
+  onDeleteEvent?: (eventId: string) => void;
 };
 
-export default function HistoryScreen({ refreshKey = 0, onEventPress }: HistoryScreenProps) {
+export default function HistoryScreen({
+  refreshKey = 0,
+  onEventPress,
+  onDeleteEvent,
+}: HistoryScreenProps) {
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +38,12 @@ export default function HistoryScreen({ refreshKey = 0, onEventPress }: HistoryS
       cancelled = true;
     };
   }, [refreshKey]);
+
+  const handleDelete = (eventId: string) => {
+    setEvents((prev) => prev.filter((event) => event.id !== eventId));
+    setDeletingId(null);
+    onDeleteEvent?.(eventId);
+  };
 
   if (!loading && events.length === 0) {
     return (
@@ -54,8 +66,7 @@ export default function HistoryScreen({ refreshKey = 0, onEventPress }: HistoryS
       renderItem={({ item }) => (
         <Pressable
           style={styles.card}
-          onPress={() => onEventPress?.(item.reminderId)}
-          disabled={!onEventPress}
+          onPress={() => onEventPress?.(item)}
         >
           <View style={styles.iconWrap}>
             <Ionicons name="checkmark-circle" size={18} color={colors.success} />
@@ -69,6 +80,31 @@ export default function HistoryScreen({ refreshKey = 0, onEventPress }: HistoryS
             </Text>
           </View>
           <Text style={styles.time}>{timeAgo(item.triggeredAt)}</Text>
+
+          {deletingId === item.id ? (
+            <View style={styles.deleteActions}>
+              <Pressable
+                style={({ pressed }) => [styles.cancelBtn, pressed && styles.btnPressed]}
+                onPress={() => setDeletingId(null)}
+              >
+                <Text style={styles.cancelLabel}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.deleteBtn, pressed && styles.btnPressed]}
+                onPress={() => handleDelete(item.id)}
+              >
+                <Text style={styles.deleteLabel}>Delete</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.trashBtn, pressed && styles.trashBtnPressed]}
+              onPress={() => setDeletingId(item.id)}
+              accessibilityLabel="Delete history entry"
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.slate300} />
+            </Pressable>
+          )}
         </Pressable>
       )}
     />
@@ -149,5 +185,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: colors.slate400,
+  },
+  deleteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 4,
+  },
+  cancelBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+    backgroundColor: colors.slate100,
+  },
+  cancelLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.slate500,
+  },
+  deleteBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+    backgroundColor: colors.destructive,
+  },
+  deleteLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.surface,
+  },
+  trashBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  trashBtnPressed: {
+    backgroundColor: '#FEF2F2',
+  },
+  btnPressed: {
+    opacity: 0.85,
   },
 });

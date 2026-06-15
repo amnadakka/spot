@@ -1,12 +1,7 @@
 /**
- * Lightweight in-memory + AsyncStorage queue for geofence history events.
- *
- * Background task enqueues a minimal stub (no reads, single small write).
- * When the app is next in the foreground, `drainPendingHistory` reads metadata
- * from AsyncStorage and promotes stubs into full HistoryEvent records.
- *
- * This two-phase design keeps the background task under ~5 ms so the OS
- * never kills the JS runtime before the notification fires.
+ * Legacy pending queue — drains stubs written before history was persisted
+ * directly in the background geofence task. Safe to remove once all installs
+ * have migrated (or after a few releases).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -14,6 +9,8 @@ import { Platform } from 'react-native';
 import type { HistoryEvent } from '../types/history';
 import { appendHistoryEvent } from './history';
 import { loadGeofenceReminderMetadata } from './geofenceReminderTitles';
+import { loadReminders } from './reminders';
+import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
 const PENDING_KEY = '@spot_pending_geofence_events_v1';
 
@@ -84,20 +81,32 @@ export async function drainPendingHistory(): Promise<void> {
 
   // Now do the "heavy" work — fine because we're in the foreground.
   let metadata: Record<string, { title: string; address: string }> = {};
+  let remindersById: Record<string, Awaited<ReturnType<typeof loadReminders>>[number]> = {};
   try {
     metadata = await loadGeofenceReminderMetadata();
   } catch {
     // Proceed with fallback labels.
   }
+  try {
+    const reminders = await loadReminders();
+    remindersById = Object.fromEntries(reminders.map((reminder) => [reminder.id, reminder]));
+  } catch {
+    // Proceed without full snapshots.
+  }
 
   for (const stub of pending) {
     const spot = metadata[stub.regionId];
+    const reminder = remindersById[stub.regionId];
     const event: HistoryEvent = {
       id: `${stub.regionId}-${Date.parse(stub.triggeredAt)}`,
       reminderId: stub.regionId,
-      spotTitle: spot?.title ?? 'Reminder',
-      address: spot?.address ?? `${stub.latitude.toFixed(4)}, ${stub.longitude.toFixed(4)}`,
+      spotTitle: reminder?.title ?? spot?.title ?? 'Reminder',
+      address: reminder?.address ?? spot?.address ?? `${stub.latitude.toFixed(4)}, ${stub.longitude.toFixed(4)}`,
       triggeredAt: stub.triggeredAt,
+      latitude: reminder?.latitude ?? stub.latitude,
+      longitude: reminder?.longitude ?? stub.longitude,
+      radiusMeters: reminder?.radiusMeters ?? DEFAULT_REMINDER_RADIUS_METERS,
+      description: reminder?.description,
     };
 
     try {

@@ -6,14 +6,17 @@ import MapView, { Circle, Marker, PROVIDER_GOOGLE, type Region } from 'react-nat
 import { colors } from '../theme/colors';
 import { radii, spacing } from '../theme/spacing';
 import type { Reminder } from '../types/reminder';
+import { formatLocalDateTime } from '../utils/formatLocalDateTime';
 
 type SpotDetailScreenProps = {
   reminder: Reminder;
+  /** When opened from history, the local time the geofence notification fired. */
+  triggeredAt?: string;
 };
 
 const MAP_DELTA = 0.008;
 
-export default function SpotDetailScreen({ reminder }: SpotDetailScreenProps) {
+export default function SpotDetailScreen({ reminder, triggeredAt }: SpotDetailScreenProps) {
   const mapRef = useRef<MapView>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -77,11 +80,19 @@ export default function SpotDetailScreen({ reminder }: SpotDetailScreenProps) {
 
         <Text style={styles.title}>{reminder.title}</Text>
 
-        {reminder.description ? (
-          <Text style={styles.description}>{reminder.description}</Text>
-        ) : null}
-
         <View style={styles.divider} />
+
+        <View style={styles.infoRow}>
+          <View style={styles.infoIconWrap}>
+            <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+          </View>
+          <View style={styles.infoTextWrap}>
+            <Text style={styles.infoLabel}>Description</Text>
+            <Text style={[styles.infoValue, !reminder.description && styles.infoValueMuted]}>
+              {reminder.description?.trim() || 'No description'}
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.infoRow}>
           <View style={styles.infoIconWrap}>
@@ -93,33 +104,33 @@ export default function SpotDetailScreen({ reminder }: SpotDetailScreenProps) {
           </View>
         </View>
 
-        <View style={styles.infoRow}>
-          <View style={styles.infoIconWrap}>
-            <Ionicons name="navigate-outline" size={16} color={colors.primary} />
+        {triggeredAt ? (
+          <View style={styles.infoRow}>
+            <View style={styles.infoIconWrap}>
+              <Ionicons name="notifications-outline" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.infoTextWrap}>
+              <Text style={styles.infoLabel}>Triggered</Text>
+              <Text style={styles.infoValue}>{formatLocalDateTime(triggeredAt)}</Text>
+            </View>
           </View>
-          <View style={styles.infoTextWrap}>
-            <Text style={styles.infoLabel}>Coordinates</Text>
-            <Text style={styles.infoValue}>
-              {reminder.latitude.toFixed(6)}, {reminder.longitude.toFixed(6)}
-            </Text>
+        ) : (
+          <View style={styles.infoRow}>
+            <View style={styles.infoIconWrap}>
+              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.infoTextWrap}>
+              <Text style={styles.infoLabel}>Created</Text>
+              <Text style={styles.infoValue}>
+                {new Date(reminder.createdAt).toLocaleDateString(undefined, {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </Text>
+            </View>
           </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <View style={styles.infoIconWrap}>
-            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
-          </View>
-          <View style={styles.infoTextWrap}>
-            <Text style={styles.infoLabel}>Created</Text>
-            <Text style={styles.infoValue}>
-              {new Date(reminder.createdAt).toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </Text>
-          </View>
-        </View>
+        )}
       </View>
 
       <Pressable
@@ -221,12 +232,6 @@ const styles = StyleSheet.create({
     color: colors.slate900,
     letterSpacing: -0.3,
   },
-  description: {
-    fontSize: 15,
-    color: colors.slate500,
-    lineHeight: 22,
-    marginTop: spacing.sm,
-  },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
@@ -261,6 +266,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.slate700,
     marginTop: 2,
+    lineHeight: 20,
+  },
+  infoValueMuted: {
+    color: colors.slate400,
+    fontStyle: 'italic',
   },
   openMapsBtn: {
     flexDirection: 'row',

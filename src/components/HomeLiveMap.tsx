@@ -71,7 +71,7 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
               longitude: reminder.longitude,
             }}
             title={reminder.title}
-            description={reminder.address}
+            description={reminder.description?.trim() || undefined}
             pinColor={occupiedSpotIds.has(reminder.id) ? colors.destructive : colors.primaryDark}
           />
         ))}

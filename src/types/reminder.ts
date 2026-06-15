@@ -11,7 +11,7 @@ export type Reminder = {
   createdAt: string;
 };
 
-export const DEFAULT_REMINDER_RADIUS_METERS = 100;
+export const DEFAULT_REMINDER_RADIUS_METERS = 200;
 
 export const MAX_DESCRIPTION_LENGTH = 100;
 

@@ -17,8 +17,10 @@ import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { loadReminders, saveReminders } from '../storage/reminders';
+import { deleteHistoryEvent, reminderFromHistoryEvent } from '../storage/history';
 import { colors } from '../theme/colors';
 import type { Reminder } from '../types/reminder';
+import type { HistoryEvent } from '../types/history';
 import {
   DEFAULT_REMINDER_RADIUS_METERS,
   MAX_ACTIVE_SPOTS,
@@ -51,6 +53,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
+  const [detailTriggeredAt, setDetailTriggeredAt] = useState<string | null>(null);
   const [detailOrigin, setDetailOrigin] = useState<'home' | 'history'>('home');
 
   const locationStatus = useUserLocation();
@@ -84,13 +87,42 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     (reminderId: string) => {
       const found = reminders.find((r) => r.id === reminderId);
       if (found) {
-        setDetailOrigin(screen === 'history' ? 'history' : 'home');
+        setDetailOrigin(activeTab === 'history' ? 'history' : 'home');
+        setDetailTriggeredAt(null);
         setSelectedReminder(found);
         setScreen('detail');
       }
     },
-    [reminders, screen],
+    [reminders, activeTab],
   );
+
+  const navigateFromHistoryEvent = useCallback(
+    (event: HistoryEvent) => {
+      const live = reminders.find((reminder) => reminder.id === event.reminderId);
+      const reminder = reminderFromHistoryEvent(event, live);
+
+      if (!reminder) {
+        Alert.alert(
+          'Spot unavailable',
+          'This history entry does not have enough location data to show details.',
+        );
+        return;
+      }
+
+      setDetailOrigin('history');
+      setDetailTriggeredAt(event.triggeredAt);
+      setSelectedReminder(reminder);
+      setScreen('detail');
+    },
+    [reminders],
+  );
+
+  const handleDeleteHistoryEvent = useCallback((eventId: string) => {
+    void deleteHistoryEvent(eventId).catch((error) => {
+      console.warn('[History] Delete failed:', error);
+      setHistoryRefreshKey((key) => key + 1);
+    });
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -102,6 +134,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     setActiveTab(tab);
     setScreen(tab);
     setSelectedReminder(null);
+    setDetailTriggeredAt(null);
     if (tab === 'history') {
       setHistoryRefreshKey((key) => key + 1);
     }
@@ -192,6 +225,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
 
     if (screen === 'detail') {
       setSelectedReminder(null);
+      setDetailTriggeredAt(null);
       setScreen(detailOrigin);
       setActiveTab(detailOrigin);
       return;
@@ -199,7 +233,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
 
     setScreen('home');
     setActiveTab('home');
-  }, [screen]);
+  }, [screen, detailOrigin]);
 
   const showNav = screen === 'home' || screen === 'history';
   const showBack = screen === 'map' || screen === 'form' || screen === 'detail';
@@ -260,7 +294,11 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         ) : null}
 
         {screen === 'history' && (
-          <HistoryScreen refreshKey={historyRefreshKey} onEventPress={navigateToSpotDetail} />
+          <HistoryScreen
+            refreshKey={historyRefreshKey}
+            onEventPress={navigateFromHistoryEvent}
+            onDeleteEvent={handleDeleteHistoryEvent}
+          />
         )}
 
         {screen === 'map' && <MapPickerScreen onLocationPicked={handleLocationPicked} />}
@@ -274,7 +312,10 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         ) : null}
 
         {screen === 'detail' && selectedReminder ? (
-          <SpotDetailScreen reminder={selectedReminder} />
+          <SpotDetailScreen
+            reminder={selectedReminder}
+            triggeredAt={detailTriggeredAt ?? undefined}
+          />
         ) : null}
       </View>
 
