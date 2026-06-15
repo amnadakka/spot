@@ -14,7 +14,7 @@ import type { LocationRegion } from 'expo-location';
 import { GeofencingEventType } from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
-import { fireGeofenceNotificationImmediate } from '../notifications/showGeofenceEnterNotification';
+import { fireGeofenceAlarmImmediate } from '../notifications/showGeofenceEnterNotification';
 import { getGeofenceReminderMetadataSync } from '../storage/geofenceReminderTitles';
 import {
   clearEnterNotification,
@@ -62,9 +62,9 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
     return;
   }
 
-  // 1. Fire notification IMMEDIATELY, then mark this visit as notified.
+  // 1. Fire alarm-style ringtone reminder IMMEDIATELY, then mark this visit as notified.
   try {
-    await fireGeofenceNotificationImmediate(regionId);
+    await fireGeofenceAlarmImmediate(regionId);
     recordEnterNotification(regionId);
   } catch (e) {
     console.warn('[Geofencing] Notification failed:', e);

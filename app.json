@@ -19,7 +19,11 @@
         "googleMapsApiKey": "AIzaSyBFDYwkRVeYWVjMUIB6cljUGl7iw_E8IlM"
       },
       "infoPlist": {
-        "UIBackgroundModes": ["location", "remote-notification"]
+        "UIBackgroundModes": [
+          "location",
+          "remote-notification",
+          "audio"
+        ]
       }
     },
     "android": {
@@ -63,7 +67,14 @@
         {
           "icon": "./assets/icon.png",
           "color": "#ffffff",
-          "defaultChannel": "default"
+          "defaultChannel": "default",
+          "sounds": ["./assets/alarm_ringtone.wav"]
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
         }
       ]
     ],

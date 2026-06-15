@@ -8,12 +8,19 @@ import { ensureGeofenceAndroidChannel } from './notificationChannels';
 if (!isExpoGoAndroid()) {
   const Notifications = require('expo-notifications') as typeof import('expo-notifications');
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data;
+      const isGeofenceAlarm =
+        data?.type === 'geofence_enter' && typeof data.regionId === 'string';
+
+      return {
+        shouldShowBanner: true,
+        shouldShowList: true,
+        // Foreground geofence alarms use looping in-app playback instead.
+        shouldPlaySound: !isGeofenceAlarm,
+        shouldSetBadge: false,
+      };
+    },
   });
 }
 

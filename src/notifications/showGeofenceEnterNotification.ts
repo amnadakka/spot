@@ -1,23 +1,15 @@
 import { Platform } from 'react-native';
 
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
+import { getGeofenceReminderMetadataSync } from '../storage/geofenceReminderTitles';
 
-import { GEOFENCE_NOTIFICATION_CHANNEL_ID } from './constants';
+import { GEOFENCE_ALARM_CHANNEL_ID, SPOT_ALARM_SOUND } from './constants';
 
 /**
- * Posts an immediate local notification with ZERO disk reads in the critical path.
- *
- * Previous implementation read AsyncStorage to resolve the reminder title before
- * calling scheduleNotificationAsync. Under Doze/Suspended, that extra I/O often
- * caused the OS to kill the JS runtime before the notification could fire.
- *
- * Now: fire a generic notification instantly, embed the regionId in `data` so
- * the foreground can enrich the history entry later.
- *
- * The Android channel is created once at app launch (setupNotificationsForAppLaunch),
- * so we skip ensureGeofenceAndroidChannel here to save another async hop.
+ * Fires an alarm-style reminder immediately — custom ringtone on the OS channel,
+ * max priority, sticky until dismissed. Uses in-memory metadata only (no disk I/O).
  */
-export async function fireGeofenceNotificationImmediate(
+export async function fireGeofenceAlarmImmediate(
   regionIdentifier: string | undefined,
 ): Promise<void> {
   if (isExpoGoAndroid()) {
@@ -25,21 +17,26 @@ export async function fireGeofenceNotificationImmediate(
   }
 
   const Notifications = require('expo-notifications') as typeof import('expo-notifications');
-
-  // Skip permission check — getPermissionsAsync is another async hop.
-  // If permissions weren't granted, scheduleNotificationAsync will simply no-op on
-  // Android and throw on iOS (caught by the task's try/catch).
+  const regionId = regionIdentifier ?? 'unknown';
+  const metadata = getGeofenceReminderMetadataSync(regionId);
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Spot Reminder',
-      body: 'You entered a saved spot area.',
-      sound: true,
-      data: { regionId: regionIdentifier ?? 'unknown', type: 'geofence_enter' },
+      title: metadata?.title ?? 'Spot Alarm',
+      body: metadata?.address ?? 'You entered a saved spot area.',
+      sound: SPOT_ALARM_SOUND,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      sticky: true,
+      autoDismiss: false,
+      vibrate: [0, 500, 200, 500, 200, 500],
+      data: { regionId, type: 'geofence_enter' },
     },
     trigger:
       Platform.OS === 'android'
-        ? { channelId: GEOFENCE_NOTIFICATION_CHANNEL_ID }
+        ? { channelId: GEOFENCE_ALARM_CHANNEL_ID }
         : null,
   });
 }
+
+/** @deprecated Use fireGeofenceAlarmImmediate. */
+export const fireGeofenceNotificationImmediate = fireGeofenceAlarmImmediate;
