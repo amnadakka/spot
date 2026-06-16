@@ -14,8 +14,8 @@ export default function App() {
   const homeRef = useRef<HomeScreenHandle>(null);
 
   const { activeAlarm, dismissActiveAlarm, viewActiveAlarmSpot, startAlarmForRegion } =
-    useGeofenceAlarmRinging((regionId) => {
-      homeRef.current?.navigateToSpotDetail(regionId);
+    useGeofenceAlarmRinging((regionId, options) => {
+      homeRef.current?.navigateToSpotDetail(regionId, options);
     });
 
   useEffect(() => {

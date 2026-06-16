@@ -35,7 +35,9 @@ function resolveAlarmPayload(regionId: string): GeofenceAlarmPayload {
  * JS runtime is alive. Background/killed state still relies on the OS notification
  * ringtone; opening the app resumes looping until the user dismisses.
  */
-export function useGeofenceAlarmRinging(onViewSpot: (regionId: string) => void): {
+export function useGeofenceAlarmRinging(
+  onViewSpot: (regionId: string, options?: { triggeredAt?: string | null }) => void,
+): {
   activeAlarm: ActiveGeofenceAlarm | null;
   dismissActiveAlarm: () => void;
   viewActiveAlarmSpot: () => void;
@@ -71,7 +73,11 @@ export function useGeofenceAlarmRinging(onViewSpot: (regionId: string) => void):
 
     const regionId = activeAlarm.regionId;
     dismissActiveAlarm();
-    onViewSpotRef.current(regionId);
+
+    // Let the alarm modal unmount before navigating underneath it.
+    requestAnimationFrame(() => {
+      onViewSpotRef.current(regionId, { triggeredAt: new Date().toISOString() });
+    });
   }, [activeAlarm, dismissActiveAlarm]);
 
   const startAlarmForRegion = useCallback((regionId: string) => {

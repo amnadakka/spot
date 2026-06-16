@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useState, forwardRef } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 
 import AddSpotForm from '../components/AddSpotForm';
@@ -42,12 +42,18 @@ function makeReminderId(): string {
 }
 
 export type HomeScreenHandle = {
-  navigateToSpotDetail: (reminderId: string) => void;
+  navigateToSpotDetail: (reminderId: string, options?: { triggeredAt?: string | null }) => void;
+};
+
+type PendingSpotNavigation = {
+  reminderId: string;
+  triggeredAt?: string | null;
 };
 
 const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const pendingNavigationRef = useRef<PendingSpotNavigation | null>(null);
   const [screen, setScreen] = useState<Screen>('home');
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
@@ -83,18 +89,54 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     void saveReminders(reminders);
   }, [loading, reminders]);
 
+  const openSpotDetail = useCallback(
+    (reminder: Reminder, options?: { triggeredAt?: string | null; origin?: 'home' | 'history' }) => {
+      const origin = options?.origin ?? (activeTab === 'history' ? 'history' : 'home');
+      setDetailOrigin(origin);
+      setDetailTriggeredAt(options?.triggeredAt ?? null);
+      setSelectedReminder(reminder);
+      setScreen('detail');
+      setActiveTab(origin);
+    },
+    [activeTab],
+  );
+
   const navigateToSpotDetail = useCallback(
-    (reminderId: string) => {
+    (reminderId: string, options?: { triggeredAt?: string | null }) => {
       const found = reminders.find((r) => r.id === reminderId);
       if (found) {
-        setDetailOrigin(activeTab === 'history' ? 'history' : 'home');
-        setDetailTriggeredAt(null);
-        setSelectedReminder(found);
-        setScreen('detail');
+        openSpotDetail(found, options);
+        pendingNavigationRef.current = null;
+        return;
       }
+
+      pendingNavigationRef.current = {
+        reminderId,
+        triggeredAt: options?.triggeredAt ?? null,
+      };
     },
-    [reminders, activeTab],
+    [reminders, openSpotDetail],
   );
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const pending = pendingNavigationRef.current;
+    if (!pending) {
+      return;
+    }
+
+    const found = reminders.find((reminder) => reminder.id === pending.reminderId);
+    if (!found) {
+      pendingNavigationRef.current = null;
+      return;
+    }
+
+    openSpotDetail(found, { triggeredAt: pending.triggeredAt, origin: 'home' });
+    pendingNavigationRef.current = null;
+  }, [loading, reminders, openSpotDetail]);
 
   const navigateFromHistoryEvent = useCallback(
     (event: HistoryEvent) => {
