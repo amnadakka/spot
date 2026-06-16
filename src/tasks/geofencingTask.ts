@@ -21,6 +21,7 @@ import {
   recordEnterNotification,
   shouldSuppressEnterNotification,
 } from '../storage/geofenceEnterDedup';
+import { registerVisitEnter } from '../storage/geofenceVisitBatch';
 import { appendGeofenceEnterHistory } from '../storage/history';
 
 export const GEOFENCING_TASK_NAME = 'REMINDER_GEOFENCING';
@@ -62,13 +63,18 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
     return;
   }
 
-  // 1. Fire alarm-style ringtone reminder IMMEDIATELY, then mark this visit as notified.
-  try {
-    await fireGeofenceAlarmImmediate(regionId);
-    recordEnterNotification(regionId);
-  } catch (e) {
-    console.warn('[Geofencing] Notification failed:', e);
+  // 1. Group overlapping enters into one alarm per visit, then notify if needed.
+  const visit = registerVisitEnter(regionId);
+
+  if (visit.shouldFireAlarm) {
+    try {
+      await fireGeofenceAlarmImmediate(visit.regionIds, visit.startedAt);
+    } catch (e) {
+      console.warn('[Geofencing] Alarm failed:', e);
+    }
   }
+
+  recordEnterNotification(regionId);
 
   // 2. Persist history — awaited so the write finishes before the task exits.
   // Labels come from the in-memory metadata cache (zero disk reads on this step).

@@ -6,12 +6,23 @@ import {
   getGeofenceReminderMetadataSync,
   loadGeofenceReminderMetadata,
 } from '../storage/geofenceReminderTitles';
+import {
+  clearVisitBatch,
+  getActiveVisitBatchSync,
+  loadVisitBatch,
+} from '../storage/geofenceVisitBatch';
 
-type GeofenceAlarmPayload = {
-  regionId: string;
-  title: string;
-  subtitle: string;
-};
+function getRegionIdsFromGeofenceData(data: Record<string, unknown>): string[] {
+  if (Array.isArray(data.regionIds)) {
+    return data.regionIds.filter((id): id is string => typeof id === 'string');
+  }
+
+  if (typeof data.regionId === 'string') {
+    return [data.regionId];
+  }
+
+  return [];
+}
 
 function isGeofenceEnterNotification(data: Record<string, unknown> | undefined): data is {
   type: 'geofence_enter';
@@ -20,14 +31,38 @@ function isGeofenceEnterNotification(data: Record<string, unknown> | undefined):
   return data?.type === 'geofence_enter' && typeof data.regionId === 'string';
 }
 
-function resolveAlarmPayload(regionId: string): GeofenceAlarmPayload {
-  const metadata = getGeofenceReminderMetadataSync(regionId);
+function resolveAlarmFromRegionIds(regionIds: string[], startedAt?: number): ActiveGeofenceAlarm {
+  const uniqueIds = [...new Set(regionIds)];
 
   return {
-    regionId,
-    title: metadata?.title ?? 'Spot Alarm',
-    subtitle: metadata?.address ?? 'You entered a saved spot area.',
+    startedAt: startedAt ?? Date.now(),
+    spots: uniqueIds.map((regionId) => {
+      const metadata = getGeofenceReminderMetadataSync(regionId);
+
+      return {
+        regionId,
+        title: metadata?.title ?? 'Spot Alarm',
+        subtitle: metadata?.address ?? 'You entered a saved spot area.',
+      };
+    }),
   };
+}
+
+function resolveAlarmFromNotificationData(data: Record<string, unknown>): ActiveGeofenceAlarm | null {
+  const regionIds = getRegionIdsFromGeofenceData(data);
+  if (regionIds.length === 0) {
+    return null;
+  }
+
+  const batch = getActiveVisitBatchSync();
+  if (batch && batch.regionIds.length > regionIds.length) {
+    return resolveAlarmFromRegionIds(batch.regionIds, batch.startedAt);
+  }
+
+  const batchStartedAt =
+    typeof data.batchStartedAt === 'number' ? data.batchStartedAt : batch?.startedAt;
+
+  return resolveAlarmFromRegionIds(regionIds, batchStartedAt);
 }
 
 /**
@@ -40,23 +75,41 @@ export function useGeofenceAlarmRinging(
 ): {
   activeAlarm: ActiveGeofenceAlarm | null;
   dismissActiveAlarm: () => void;
-  viewActiveAlarmSpot: () => void;
+  viewActiveAlarmSpot: (regionId: string) => void;
   startAlarmForRegion: (regionId: string) => void;
 } {
   const [activeAlarm, setActiveAlarm] = useState<ActiveGeofenceAlarm | null>(null);
   const onViewSpotRef = useRef(onViewSpot);
   onViewSpotRef.current = onViewSpot;
 
-  const startAlarm = useCallback((payload: GeofenceAlarmPayload) => {
-    setActiveAlarm({
-      regionId: payload.regionId,
-      title: payload.title,
-      subtitle: payload.subtitle,
+  const startAlarm = useCallback((alarm: ActiveGeofenceAlarm) => {
+    setActiveAlarm(alarm);
+  }, []);
+
+  const refreshActiveAlarmFromBatch = useCallback(() => {
+    const batch = getActiveVisitBatchSync();
+    if (!batch) {
+      return;
+    }
+
+    setActiveAlarm((current) => {
+      if (!current) {
+        return resolveAlarmFromRegionIds(batch.regionIds, batch.startedAt);
+      }
+
+      const currentIds = current.spots.map((spot) => spot.regionId).join(',');
+      const batchIds = batch.regionIds.join(',');
+      if (currentIds === batchIds) {
+        return current;
+      }
+
+      return resolveAlarmFromRegionIds(batch.regionIds, batch.startedAt);
     });
   }, []);
 
   const dismissActiveAlarm = useCallback(() => {
     setActiveAlarm(null);
+    clearVisitBatch();
 
     if (isExpoGoAndroid()) {
       return;
@@ -66,25 +119,32 @@ export function useGeofenceAlarmRinging(
     void Notifications.dismissAllNotificationsAsync();
   }, []);
 
-  const viewActiveAlarmSpot = useCallback(() => {
-    if (!activeAlarm) {
-      return;
-    }
+  const viewActiveAlarmSpot = useCallback(
+    (regionId: string) => {
+      const triggeredAt = activeAlarm
+        ? new Date(activeAlarm.startedAt).toISOString()
+        : new Date().toISOString();
 
-    const regionId = activeAlarm.regionId;
-    dismissActiveAlarm();
+      dismissActiveAlarm();
 
-    // Let the alarm modal unmount before navigating underneath it.
-    requestAnimationFrame(() => {
-      onViewSpotRef.current(regionId, { triggeredAt: new Date().toISOString() });
-    });
-  }, [activeAlarm, dismissActiveAlarm]);
+      requestAnimationFrame(() => {
+        onViewSpotRef.current(regionId, { triggeredAt });
+      });
+    },
+    [activeAlarm, dismissActiveAlarm],
+  );
 
-  const startAlarmForRegion = useCallback((regionId: string) => {
-    void loadGeofenceReminderMetadata().then(() => {
-      startAlarm(resolveAlarmPayload(regionId));
-    });
-  }, [startAlarm]);
+  const startAlarmForRegion = useCallback(
+    (regionId: string) => {
+      void Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]).then(() => {
+        const batch = getActiveVisitBatchSync();
+        const regionIds =
+          batch && batch.regionIds.includes(regionId) ? batch.regionIds : [regionId];
+        startAlarm(resolveAlarmFromRegionIds(regionIds, batch?.startedAt));
+      });
+    },
+    [startAlarm],
+  );
 
   useEffect(() => {
     if (isExpoGoAndroid()) {
@@ -101,8 +161,12 @@ export function useGeofenceAlarmRinging(
         return;
       }
 
-      await loadGeofenceReminderMetadata();
-      startAlarm(resolveAlarmPayload(data.regionId));
+      await Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]);
+
+      const alarm = resolveAlarmFromNotificationData(data);
+      if (alarm) {
+        startAlarm(alarm);
+      }
     }
 
     const receivedSubscription = Notifications.addNotificationReceivedListener(
@@ -111,22 +175,36 @@ export function useGeofenceAlarmRinging(
       },
     );
 
-    void Notifications.getPresentedNotificationsAsync().then((presented) => {
-      const latestGeofence = presented
-        .map((item) => item.request.content)
-        .filter((content) => isGeofenceEnterNotification(content.data))
-        .at(-1);
+    void Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]).then(() => {
+      void Notifications.getPresentedNotificationsAsync().then((presented) => {
+        const latestGeofence = presented
+          .map((item) => item.request.content)
+          .filter((content) => isGeofenceEnterNotification(content.data))
+          .at(-1);
 
-      if (latestGeofence && isGeofenceEnterNotification(latestGeofence.data)) {
-        const regionId = latestGeofence.data.regionId;
-        void loadGeofenceReminderMetadata().then(() => {
-          startAlarm(resolveAlarmPayload(regionId));
-        });
-      }
+        if (latestGeofence && isGeofenceEnterNotification(latestGeofence.data)) {
+          const alarm = resolveAlarmFromNotificationData(latestGeofence.data);
+          if (alarm) {
+            startAlarm(alarm);
+          }
+        }
+      });
     });
 
     return () => receivedSubscription.remove();
   }, [startAlarm]);
+
+  useEffect(() => {
+    if (!activeAlarm) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      refreshActiveAlarmFromBatch();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [activeAlarm, refreshActiveAlarmFromBatch]);
 
   return {
     activeAlarm,

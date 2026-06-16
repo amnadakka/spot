@@ -27,8 +27,8 @@ import {
   MAX_ACTIVE_SPOTS_MESSAGE,
 } from '../types/reminder';
 import {
-  activeSpotProximityMessage,
-  findConflictingActiveReminder,
+  activeSpotOverlapWarningMessage,
+  findOverlappingActiveReminder,
 } from '../utils/activeReminderProximity';
 
 type Screen = 'home' | 'history' | 'map' | 'form' | 'detail';
@@ -199,12 +199,6 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
           Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
           return prev;
         }
-
-        const conflict = findConflictingActiveReminder(prev, target, { excludeId: id });
-        if (conflict) {
-          Alert.alert('Too close to another spot', activeSpotProximityMessage(conflict));
-          return prev;
-        }
       }
 
       return prev.map((reminder) =>
@@ -226,35 +220,14 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     setScreen('map');
   }, [reminders]);
 
-  const handleLocationPicked = useCallback(
-    (location: PickedLocation) => {
-      const conflict = findConflictingActiveReminder(reminders, location);
-      if (conflict) {
-        Alert.alert('Too close to another spot', activeSpotProximityMessage(conflict));
-        return;
-      }
+  const handleLocationPicked = useCallback((location: PickedLocation) => {
+    setPickedLocation(location);
+    setScreen('form');
+  }, []);
 
-      setPickedLocation(location);
-      setScreen('form');
-    },
-    [reminders],
-  );
-
-  const handleConfirm = useCallback(
+  const saveNewReminder = useCallback(
     (title: string, description: string) => {
       if (!pickedLocation) {
-        return;
-      }
-
-      const activeCount = reminders.filter((reminder) => reminder.enabled).length;
-      if (activeCount >= MAX_ACTIVE_SPOTS) {
-        Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
-        return;
-      }
-
-      const conflict = findConflictingActiveReminder(reminders, pickedLocation);
-      if (conflict) {
-        Alert.alert('Too close to another spot', activeSpotProximityMessage(conflict));
         return;
       }
 
@@ -275,7 +248,36 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       setScreen('home');
       setActiveTab('home');
     },
-    [pickedLocation, reminders],
+    [pickedLocation],
+  );
+
+  const handleConfirm = useCallback(
+    (title: string, description: string) => {
+      if (!pickedLocation) {
+        return;
+      }
+
+      const activeCount = reminders.filter((reminder) => reminder.enabled).length;
+      if (activeCount >= MAX_ACTIVE_SPOTS) {
+        Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+        return;
+      }
+
+      const conflict = findOverlappingActiveReminder(reminders, pickedLocation);
+      if (conflict) {
+        Alert.alert('Overlapping range', activeSpotOverlapWarningMessage(conflict), [
+          { text: 'Go back', style: 'cancel' },
+          {
+            text: 'Save anyway',
+            onPress: () => saveNewReminder(title, description),
+          },
+        ]);
+        return;
+      }
+
+      saveNewReminder(title, description);
+    },
+    [pickedLocation, reminders, saveNewReminder],
   );
 
   const handleDiscard = useCallback(() => {

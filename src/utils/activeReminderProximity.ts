@@ -3,21 +3,13 @@ import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
 import { distanceMeters, type Coordinate } from './geo';
 
-export function activeSpotProximityMessage(
-  conflict: Reminder,
-  newRadiusMeters: number = DEFAULT_REMINDER_RADIUS_METERS,
-): string {
-  const minSeparation = Math.round(newRadiusMeters + conflict.radiusMeters);
-  return `This location overlaps with "${conflict.title}" (${conflict.radiusMeters} m range). Pick a spot at least ${minSeparation} m away.`;
-}
-
-/** Returns the first enabled reminder whose 200 m range would overlap the given location. */
-export function findConflictingActiveReminder(
+/** Returns the first enabled reminder whose range overlaps the given location. */
+export function findOverlappingActiveReminder(
   reminders: Reminder[],
   location: Coordinate,
   options?: { excludeId?: string; radiusMeters?: number },
 ): Reminder | undefined {
-  const radiusMeters = options?.radiusMeters ?? DEFAULT_REMINDER_RADIUS_METERS;
+  const newRadius = options?.radiusMeters ?? DEFAULT_REMINDER_RADIUS_METERS;
 
   return reminders.find((reminder) => {
     if (!reminder.enabled) {
@@ -29,6 +21,10 @@ export function findConflictingActiveReminder(
     }
 
     const separation = distanceMeters(location, reminder);
-    return separation < radiusMeters + reminder.radiusMeters;
+    return separation < newRadius + reminder.radiusMeters;
   });
+}
+
+export function activeSpotOverlapWarningMessage(conflict: Reminder): string {
+  return `This overlaps with "${conflict.title}" (${conflict.radiusMeters} m range). When you're nearby, reminders in the same area are grouped into one alarm.`;
 }
