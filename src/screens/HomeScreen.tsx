@@ -26,6 +26,10 @@ import {
   MAX_ACTIVE_SPOTS,
   MAX_ACTIVE_SPOTS_MESSAGE,
 } from '../types/reminder';
+import {
+  activeSpotProximityMessage,
+  findConflictingActiveReminder,
+} from '../utils/activeReminderProximity';
 
 type Screen = 'home' | 'history' | 'map' | 'form' | 'detail';
 
@@ -195,6 +199,12 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
           Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
           return prev;
         }
+
+        const conflict = findConflictingActiveReminder(prev, target, { excludeId: id });
+        if (conflict) {
+          Alert.alert('Too close to another spot', activeSpotProximityMessage(conflict));
+          return prev;
+        }
       }
 
       return prev.map((reminder) =>
@@ -216,10 +226,19 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     setScreen('map');
   }, [reminders]);
 
-  const handleLocationPicked = useCallback((location: PickedLocation) => {
-    setPickedLocation(location);
-    setScreen('form');
-  }, []);
+  const handleLocationPicked = useCallback(
+    (location: PickedLocation) => {
+      const conflict = findConflictingActiveReminder(reminders, location);
+      if (conflict) {
+        Alert.alert('Too close to another spot', activeSpotProximityMessage(conflict));
+        return;
+      }
+
+      setPickedLocation(location);
+      setScreen('form');
+    },
+    [reminders],
+  );
 
   const handleConfirm = useCallback(
     (title: string, description: string) => {
@@ -230,6 +249,12 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       const activeCount = reminders.filter((reminder) => reminder.enabled).length;
       if (activeCount >= MAX_ACTIVE_SPOTS) {
         Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+        return;
+      }
+
+      const conflict = findConflictingActiveReminder(reminders, pickedLocation);
+      if (conflict) {
+        Alert.alert('Too close to another spot', activeSpotProximityMessage(conflict));
         return;
       }
 
