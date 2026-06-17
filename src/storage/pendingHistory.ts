@@ -6,11 +6,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-import type { HistoryEvent } from '../types/history';
-import { appendHistoryEvent } from './history';
+import { appendGeofenceEnterHistory } from './history';
 import { loadGeofenceReminderMetadata } from './geofenceReminderTitles';
 import { loadReminders } from './reminders';
-import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
 const PENDING_KEY = '@spot_pending_geofence_events_v1';
 
@@ -97,20 +95,16 @@ export async function drainPendingHistory(): Promise<void> {
   for (const stub of pending) {
     const spot = metadata[stub.regionId];
     const reminder = remindersById[stub.regionId];
-    const event: HistoryEvent = {
-      id: `${stub.regionId}-${Date.parse(stub.triggeredAt)}`,
-      reminderId: stub.regionId,
-      spotTitle: reminder?.title ?? spot?.title ?? 'Reminder',
-      address: reminder?.address ?? spot?.address ?? `${stub.latitude.toFixed(4)}, ${stub.longitude.toFixed(4)}`,
-      triggeredAt: stub.triggeredAt,
-      latitude: reminder?.latitude ?? stub.latitude,
-      longitude: reminder?.longitude ?? stub.longitude,
-      radiusMeters: reminder?.radiusMeters ?? DEFAULT_REMINDER_RADIUS_METERS,
-      description: reminder?.description,
-    };
 
     try {
-      await appendHistoryEvent(event);
+      await appendGeofenceEnterHistory({
+        regionId: stub.regionId,
+        latitude: reminder?.latitude ?? stub.latitude,
+        longitude: reminder?.longitude ?? stub.longitude,
+        triggeredAt: stub.triggeredAt,
+        spotTitle: reminder?.title ?? spot?.title,
+        address: reminder?.address ?? spot?.address,
+      });
     } catch {
       // Individual event failure shouldn't block the rest.
     }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { InteractionManager } from 'react-native';
 
 import type { ActiveGeofenceAlarm } from '../components/GeofenceAlarmRingingLayer';
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
@@ -136,11 +137,13 @@ export function useGeofenceAlarmRinging(
 
   const startAlarmForRegion = useCallback(
     (regionId: string) => {
-      void Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]).then(() => {
-        const batch = getActiveVisitBatchSync();
-        const regionIds =
-          batch && batch.regionIds.includes(regionId) ? batch.regionIds : [regionId];
-        startAlarm(resolveAlarmFromRegionIds(regionIds, batch?.startedAt));
+      InteractionManager.runAfterInteractions(() => {
+        void Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]).then(() => {
+          const batch = getActiveVisitBatchSync();
+          const regionIds =
+            batch && batch.regionIds.includes(regionId) ? batch.regionIds : [regionId];
+          startAlarm(resolveAlarmFromRegionIds(regionIds, batch?.startedAt));
+        });
       });
     },
     [startAlarm],
@@ -174,22 +177,6 @@ export function useGeofenceAlarmRinging(
         void handleIncomingNotification(notification);
       },
     );
-
-    void Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]).then(() => {
-      void Notifications.getPresentedNotificationsAsync().then((presented) => {
-        const latestGeofence = presented
-          .map((item) => item.request.content)
-          .filter((content) => isGeofenceEnterNotification(content.data))
-          .at(-1);
-
-        if (latestGeofence && isGeofenceEnterNotification(latestGeofence.data)) {
-          const alarm = resolveAlarmFromNotificationData(latestGeofence.data);
-          if (alarm) {
-            startAlarm(alarm);
-          }
-        }
-      });
-    });
 
     return () => receivedSubscription.remove();
   }, [startAlarm]);

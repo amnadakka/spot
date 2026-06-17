@@ -7,6 +7,20 @@ import { persistGeofenceReminderTitles } from '../storage/geofenceReminderTitles
 import { GEOFENCING_TASK_NAME } from '../tasks/geofencingTask';
 import type { Reminder } from '../types/reminder';
 
+/** Fingerprint of active geofence regions — skip re-register when unchanged. */
+function activeRegionsFingerprint(reminders: Reminder[]): string {
+  return reminders
+    .filter((reminder) => reminder.enabled)
+    .map(
+      (reminder) =>
+        `${reminder.id}:${reminder.latitude.toFixed(6)}:${reminder.longitude.toFixed(6)}:${Math.max(reminder.radiusMeters, 1)}`,
+    )
+    .sort()
+    .join('|');
+}
+
+let lastSyncedRegionsFingerprint: string | null = null;
+
 /**
  * Mirrors `reminders` into the OS geofencing monitor via `startGeofencingAsync`.
  * Replacing the list updates regions; an empty list stops monitoring.
@@ -48,10 +62,16 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
 
   try {
     if (activeReminders.length === 0) {
+      lastSyncedRegionsFingerprint = null;
       const started = await Location.hasStartedGeofencingAsync(GEOFENCING_TASK_NAME);
       if (started) {
         await Location.stopGeofencingAsync(GEOFENCING_TASK_NAME);
       }
+      return;
+    }
+
+    const fingerprint = activeRegionsFingerprint(reminders);
+    if (fingerprint === lastSyncedRegionsFingerprint) {
       return;
     }
 
@@ -65,6 +85,7 @@ export async function syncReminderGeofencing(reminders: Reminder[]): Promise<voi
     }));
 
     await Location.startGeofencingAsync(GEOFENCING_TASK_NAME, regions);
+    lastSyncedRegionsFingerprint = fingerprint;
   } catch (e) {
     console.warn('[Geofencing] Sync failed:', e);
   }

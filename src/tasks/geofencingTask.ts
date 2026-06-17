@@ -18,6 +18,7 @@ import { fireGeofenceAlarmImmediate } from '../notifications/showGeofenceEnterNo
 import { getGeofenceReminderMetadataSync } from '../storage/geofenceReminderTitles';
 import {
   clearEnterNotification,
+  ensureEnterDedupHydrated,
   recordEnterNotification,
   shouldSuppressEnterNotification,
 } from '../storage/geofenceEnterDedup';
@@ -60,6 +61,13 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
   // Fast in-memory dedup — no async I/O before this check.
   if (shouldSuppressEnterNotification(regionId)) {
     console.log('[Geofencing] Suppressed duplicate enter for', regionId);
+    return;
+  }
+
+  // After a cold JS start the in-memory cache is empty; hydrate before proceeding.
+  await ensureEnterDedupHydrated();
+  if (shouldSuppressEnterNotification(regionId)) {
+    console.log('[Geofencing] Suppressed duplicate enter for', regionId, '(after hydrate)');
     return;
   }
 

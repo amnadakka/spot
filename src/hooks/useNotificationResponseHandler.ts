@@ -1,4 +1,4 @@
-import { AppState, InteractionManager, type AppStateStatus } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { useEffect, useRef } from 'react';
 
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
@@ -22,7 +22,6 @@ function isGeofenceEnterResponse(data: Record<string, unknown> | undefined): dat
  * Handles:
  * 1. App already running — `addNotificationResponseReceivedListener`
  * 2. Cold start from notification — `getLastNotificationResponseAsync` after UI is ready
- * 3. Return to foreground with a pending geofence notification — re-check presented notifications
  */
 export function useNotificationResponseHandler(
   onNavigate: (regionId: string) => void,
@@ -38,6 +37,14 @@ export function useNotificationResponseHandler(
 
     const Notifications = require('expo-notifications') as typeof import('expo-notifications');
 
+    function deferNavigate(regionId: string): void {
+      InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => {
+          onNavigateRef.current(regionId);
+        });
+      });
+    }
+
     function handleResponse(response: NotificationResponse): void {
       const data = response.notification.request.content.data;
       if (!isGeofenceEnterResponse(data)) {
@@ -50,19 +57,7 @@ export function useNotificationResponseHandler(
       }
       handledResponseKeysRef.current.add(responseKey);
 
-      onNavigateRef.current(data.regionId);
-    }
-
-    async function syncPresentedGeofenceAlarms(): Promise<void> {
-      const presented = await Notifications.getPresentedNotificationsAsync();
-      const latestGeofence = presented
-        .map((item) => item.request.content)
-        .filter((content) => isGeofenceEnterResponse(content.data))
-        .at(-1);
-
-      if (latestGeofence && isGeofenceEnterResponse(latestGeofence.data)) {
-        onNavigateRef.current(latestGeofence.data.regionId);
-      }
+      deferNavigate(data.regionId);
     }
 
     const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
@@ -71,23 +66,13 @@ export function useNotificationResponseHandler(
       void Notifications.getLastNotificationResponseAsync().then((response) => {
         if (response) {
           handleResponse(response);
-          return;
         }
-
-        void syncPresentedGeofenceAlarms();
       });
-    });
-
-    const appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      if (nextState === 'active') {
-        void syncPresentedGeofenceAlarms();
-      }
     });
 
     return () => {
       subscription.remove();
       readyTask.cancel();
-      appStateSubscription.remove();
     };
   }, []);
 }

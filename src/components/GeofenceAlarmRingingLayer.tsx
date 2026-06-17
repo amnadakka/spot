@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { InteractionManager, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
 
 import { configureAlarmAudioMode } from '../audio/configureAlarmAudio';
@@ -36,19 +36,38 @@ export default function GeofenceAlarmRingingLayer({
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
-      await configureAlarmAudioMode();
-      if (cancelled) {
-        return;
-      }
+    const readyTask = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          await configureAlarmAudioMode();
+          if (cancelled) {
+            return;
+          }
 
-      player.loop = true;
-      player.play();
-    })();
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
+
+          if (cancelled) {
+            return;
+          }
+
+          player.loop = true;
+          player.play();
+        } catch (error) {
+          console.warn('[Alarm] Playback failed:', error);
+        }
+      })();
+    });
 
     return () => {
       cancelled = true;
-      player.pause();
+      readyTask.cancel();
+      try {
+        player.pause();
+      } catch {
+        // Player may not be ready if mount was very short.
+      }
     };
   }, [player]);
 

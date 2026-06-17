@@ -31,7 +31,22 @@ async function hydrate(): Promise<void> {
   }
 }
 
-void hydrate();
+let hydratePromise: Promise<void> | null = null;
+
+/** Ensures persisted dedup state is loaded before checking after a cold JS start. */
+export function ensureEnterDedupHydrated(): Promise<void> {
+  if (hydrated) {
+    return Promise.resolve();
+  }
+
+  if (!hydratePromise) {
+    hydratePromise = hydrate();
+  }
+
+  return hydratePromise;
+}
+
+void ensureEnterDedupHydrated();
 
 function persist(): void {
   if (Platform.OS === 'web') {

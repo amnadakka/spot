@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
+import { GEOFENCE_ENTER_COOLDOWN_MS } from './geofenceEnterDedup';
 import type { HistoryEvent } from '../types/history';
 import type { Reminder } from '../types/reminder';
 import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
@@ -31,8 +32,36 @@ export async function appendHistoryEvent(event: HistoryEvent): Promise<void> {
   }
 
   const existing = await loadHistory();
+  if (existing.some((entry) => entry.id === event.id)) {
+    return;
+  }
+
   const next = [event, ...existing].slice(0, MAX_HISTORY_EVENTS);
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+}
+
+function hasRecentHistoryForRegion(
+  events: HistoryEvent[],
+  regionId: string,
+  triggeredAt: string,
+): boolean {
+  const triggeredMs = Date.parse(triggeredAt);
+  if (Number.isNaN(triggeredMs)) {
+    return false;
+  }
+
+  return events.some((event) => {
+    if (event.reminderId !== regionId) {
+      return false;
+    }
+
+    const eventMs = Date.parse(event.triggeredAt);
+    if (Number.isNaN(eventMs)) {
+      return false;
+    }
+
+    return Math.abs(triggeredMs - eventMs) < GEOFENCE_ENTER_COOLDOWN_MS;
+  });
 }
 
 /** Minimal geofence enter record — one read + one write, no reminder list loads. */
@@ -45,6 +74,11 @@ export async function appendGeofenceEnterHistory(params: {
   address?: string;
 }): Promise<void> {
   const { regionId, latitude, longitude, triggeredAt, spotTitle, address } = params;
+
+  const existing = await loadHistory();
+  if (hasRecentHistoryForRegion(existing, regionId, triggeredAt)) {
+    return;
+  }
 
   await appendHistoryEvent({
     id: `${regionId}-${Date.parse(triggeredAt)}`,
