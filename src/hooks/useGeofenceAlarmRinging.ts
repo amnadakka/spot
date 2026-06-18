@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { InteractionManager } from 'react-native';
+import { AppState, type AppStateStatus, InteractionManager } from 'react-native';
 
 import type { ActiveGeofenceAlarm } from '../components/GeofenceAlarmRingingLayer';
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
@@ -68,8 +68,9 @@ function resolveAlarmFromNotificationData(data: Record<string, unknown>): Active
 
 /**
  * Starts looping in-app alarm playback when a geofence reminder fires while the
- * JS runtime is alive. Background/killed state still relies on the OS notification
- * ringtone; opening the app resumes looping until the user dismisses.
+ * JS runtime is alive. When the app was backgrounded, the OS notification still
+ * rings; returning to the app (without tapping the notification) restores the
+ * full-screen alarm from the active visit batch or any pending geofence alert.
  */
 export function useGeofenceAlarmRinging(
   onViewSpot: (regionId: string, options?: { triggeredAt?: string | null }) => void,
@@ -80,6 +81,8 @@ export function useGeofenceAlarmRinging(
   startAlarmForRegion: (regionId: string) => void;
 } {
   const [activeAlarm, setActiveAlarm] = useState<ActiveGeofenceAlarm | null>(null);
+  const activeAlarmRef = useRef<ActiveGeofenceAlarm | null>(null);
+  activeAlarmRef.current = activeAlarm;
   const onViewSpotRef = useRef(onViewSpot);
   onViewSpotRef.current = onViewSpot;
 
@@ -192,6 +195,73 @@ export function useGeofenceAlarmRinging(
 
     return () => clearInterval(interval);
   }, [activeAlarm, refreshActiveAlarmFromBatch]);
+
+  useEffect(() => {
+    if (isExpoGoAndroid()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function restoreAlarmFromForeground(): Promise<void> {
+      if (cancelled || activeAlarmRef.current) {
+        return;
+      }
+
+      await Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]);
+
+      if (cancelled || activeAlarmRef.current) {
+        return;
+      }
+
+      const batch = getActiveVisitBatchSync();
+      if (batch) {
+        startAlarm(resolveAlarmFromRegionIds(batch.regionIds, batch.startedAt));
+        return;
+      }
+
+      const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+      const presented = await Notifications.getPresentedNotificationsAsync();
+
+      if (cancelled || activeAlarmRef.current) {
+        return;
+      }
+
+      for (const notification of presented) {
+        const data = notification.request.content.data as Record<string, unknown> | undefined;
+        if (!isGeofenceEnterNotification(data)) {
+          continue;
+        }
+
+        const alarm = resolveAlarmFromNotificationData(data);
+        if (alarm) {
+          startAlarm(alarm);
+          return;
+        }
+      }
+    }
+
+    function scheduleForegroundRestore(): void {
+      InteractionManager.runAfterInteractions(() => {
+        void restoreAlarmFromForeground();
+      });
+    }
+
+    scheduleForegroundRestore();
+
+    function handleAppState(nextState: AppStateStatus): void {
+      if (nextState === 'active') {
+        scheduleForegroundRestore();
+      }
+    }
+
+    const subscription = AppState.addEventListener('change', handleAppState);
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [startAlarm]);
 
   return {
     activeAlarm,
