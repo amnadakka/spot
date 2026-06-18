@@ -11,14 +11,23 @@ export type MapCoordinate = {
   longitude: number;
 };
 
-const MAP_DELTA = 0.01;
+const DEFAULT_MAP_DELTA = 0.01;
+const MIN_MAP_DELTA = 0.0005;
+const MAX_MAP_DELTA = 0.45;
+const ZOOM_IN_FACTOR = 0.5;
+const ZOOM_OUT_FACTOR = 2;
 
-function regionForCoordinate(coordinate: MapCoordinate): Region {
+function clampMapDelta(delta: number): number {
+  return Math.min(MAX_MAP_DELTA, Math.max(MIN_MAP_DELTA, delta));
+}
+
+function regionForCoordinate(coordinate: MapCoordinate, delta = DEFAULT_MAP_DELTA): Region {
+  const clampedDelta = clampMapDelta(delta);
   return {
     latitude: coordinate.latitude,
     longitude: coordinate.longitude,
-    latitudeDelta: MAP_DELTA,
-    longitudeDelta: MAP_DELTA,
+    latitudeDelta: clampedDelta,
+    longitudeDelta: clampedDelta,
   };
 }
 
@@ -40,9 +49,13 @@ export default function CenterPinMapPicker({
   const mapRef = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
   const isDragging = useRef(false);
+  const regionDeltaRef = useRef(DEFAULT_MAP_DELTA);
+  const coordinateFromMapRef = useRef(false);
+  const currentCenterRef = useRef<MapCoordinate | null>(null);
 
-  const animateTo = useCallback((next: MapCoordinate) => {
-    const region = regionForCoordinate(next);
+  const animateTo = useCallback((next: MapCoordinate, delta = regionDeltaRef.current) => {
+    const region = regionForCoordinate(next, delta);
+    regionDeltaRef.current = region.latitudeDelta;
     mapRef.current?.animateToRegion(region, 350);
   }, []);
 
@@ -50,7 +63,12 @@ export default function CenterPinMapPicker({
     if (!coordinate || !ready || isDragging.current) {
       return;
     }
+    if (coordinateFromMapRef.current) {
+      coordinateFromMapRef.current = false;
+      return;
+    }
     animateTo(coordinate);
+    currentCenterRef.current = coordinate;
   }, [animateTo, coordinate, ready]);
 
   const handleRegionChange = useCallback(() => {
@@ -60,12 +78,30 @@ export default function CenterPinMapPicker({
   const handleRegionChangeComplete = useCallback(
     (region: Region) => {
       isDragging.current = false;
-      onCoordinateChange({
+      regionDeltaRef.current = region.latitudeDelta;
+      coordinateFromMapRef.current = true;
+      currentCenterRef.current = {
         latitude: region.latitude,
         longitude: region.longitude,
-      });
+      };
+      onCoordinateChange(currentCenterRef.current);
     },
     [onCoordinateChange],
+  );
+
+  const handleZoom = useCallback(
+    (factor: number) => {
+      const center = currentCenterRef.current ?? coordinate;
+      if (!center || loading) {
+        return;
+      }
+
+      const nextDelta = clampMapDelta(regionDeltaRef.current * factor);
+      regionDeltaRef.current = nextDelta;
+      coordinateFromMapRef.current = true;
+      mapRef.current?.animateToRegion(regionForCoordinate(center, nextDelta), 200);
+    },
+    [coordinate, loading],
   );
 
   const initialRegion = coordinate
@@ -73,8 +109,8 @@ export default function CenterPinMapPicker({
     : {
         latitude: 40.7128,
         longitude: -74.006,
-        latitudeDelta: MAP_DELTA,
-        longitudeDelta: MAP_DELTA,
+        latitudeDelta: DEFAULT_MAP_DELTA,
+        longitudeDelta: DEFAULT_MAP_DELTA,
       };
 
   return (
@@ -106,6 +142,35 @@ export default function CenterPinMapPicker({
       >
         <Ionicons name="refresh" size={18} color={colors.primary} />
       </Pressable>
+
+      <View style={styles.zoomControls}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.zoomBtn,
+            styles.zoomBtnTop,
+            pressed && styles.zoomBtnPressed,
+            loading && styles.zoomBtnDisabled,
+          ]}
+          onPress={() => handleZoom(ZOOM_IN_FACTOR)}
+          disabled={loading}
+          accessibilityLabel="Zoom in"
+        >
+          <Ionicons name="add" size={20} color={colors.primary} />
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.zoomBtn,
+            styles.zoomBtnBottom,
+            pressed && styles.zoomBtnPressed,
+            loading && styles.zoomBtnDisabled,
+          ]}
+          onPress={() => handleZoom(ZOOM_OUT_FACTOR)}
+          disabled={loading}
+          accessibilityLabel="Zoom out"
+        >
+          <Ionicons name="remove" size={20} color={colors.primary} />
+        </Pressable>
+      </View>
 
       <View style={styles.addressPill} pointerEvents="none">
         <View style={styles.addressInner}>
@@ -167,6 +232,40 @@ const styles = StyleSheet.create({
   refreshBtnPressed: {
     backgroundColor: colors.slate50,
     transform: [{ scale: 0.95 }],
+  },
+  zoomControls: {
+    position: 'absolute',
+    right: 12,
+    bottom: 56,
+  },
+  zoomBtn: {
+    width: 40,
+    height: 40,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  zoomBtnTop: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomWidth: 0,
+  },
+  zoomBtnBottom: {
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  zoomBtnPressed: {
+    backgroundColor: colors.slate50,
+  },
+  zoomBtnDisabled: {
+    opacity: 0.5,
   },
   addressPill: {
     position: 'absolute',
