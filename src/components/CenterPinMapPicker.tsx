@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, type Region } from 'react-native-maps';
+import MapView, { Circle, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
 import { colors } from '../theme/colors';
-import { radii } from '../theme/spacing';
+import { radii, spacing } from '../theme/spacing';
+import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
 export type MapCoordinate = {
   latitude: number;
@@ -48,6 +49,7 @@ export default function CenterPinMapPicker({
 }: CenterPinMapPickerProps) {
   const mapRef = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
+  const [circleCenter, setCircleCenter] = useState<MapCoordinate | null>(coordinate);
   const isDragging = useRef(false);
   const regionDeltaRef = useRef(DEFAULT_MAP_DELTA);
   const coordinateFromMapRef = useRef(false);
@@ -69,10 +71,15 @@ export default function CenterPinMapPicker({
     }
     animateTo(coordinate);
     currentCenterRef.current = coordinate;
+    setCircleCenter(coordinate);
   }, [animateTo, coordinate, ready]);
 
-  const handleRegionChange = useCallback(() => {
+  const handleRegionChange = useCallback((region: Region) => {
     isDragging.current = true;
+    setCircleCenter({
+      latitude: region.latitude,
+      longitude: region.longitude,
+    });
   }, []);
 
   const handleRegionChangeComplete = useCallback(
@@ -129,7 +136,17 @@ export default function CenterPinMapPicker({
         pitchEnabled={false}
         showsUserLocation
         showsMyLocationButton={false}
-      />
+      >
+        {ready && circleCenter ? (
+          <Circle
+            center={circleCenter}
+            radius={DEFAULT_REMINDER_RADIUS_METERS}
+            fillColor="rgba(59, 130, 246, 0.12)"
+            strokeColor="rgba(59, 130, 246, 0.4)"
+            strokeWidth={1.5}
+          />
+        ) : null}
+      </MapView>
 
       <View style={styles.pinOverlay} pointerEvents="none">
         <Ionicons name="location" size={40} color={colors.primary} style={styles.pinIcon} />
@@ -170,6 +187,11 @@ export default function CenterPinMapPicker({
         >
           <Ionicons name="remove" size={20} color={colors.primary} />
         </Pressable>
+      </View>
+
+      <View style={styles.radiusBadge} pointerEvents="none">
+        <Ionicons name="resize-outline" size={12} color={colors.primary} />
+        <Text style={styles.radiusText}>{DEFAULT_REMINDER_RADIUS_METERS}m radius</Text>
       </View>
 
       <View style={styles.addressPill} pointerEvents="none">
@@ -266,6 +288,25 @@ const styles = StyleSheet.create({
   },
   zoomBtnDisabled: {
     opacity: 0.5,
+  },
+  radiusBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  radiusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primary,
   },
   addressPill: {
     position: 'absolute',
