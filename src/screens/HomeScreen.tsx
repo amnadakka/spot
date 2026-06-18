@@ -339,6 +339,16 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       <View style={styles.content}>
         {screen === 'home' ? (
           <View style={styles.homeBody}>
+            <HomeLiveMap
+              reminders={reminders}
+              occupiedSpotIds={occupiedSpotIds}
+              userLocation={
+                liveUserLocation ??
+                (locationStatus.kind === 'ok'
+                  ? { latitude: locationStatus.latitude, longitude: locationStatus.longitude }
+                  : null)
+              }
+            />
             <View style={styles.listArea}>
               {reminders.length === 0 ? (
                 <EmptyState onCreateFirst={handleAdd} />
@@ -354,11 +364,6 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
                 />
               )}
             </View>
-            <HomeLiveMap
-              reminders={reminders}
-              occupiedSpotIds={occupiedSpotIds}
-              userLocation={liveUserLocation}
-            />
           </View>
         ) : null}
 

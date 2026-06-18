@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
 import { colors } from '../theme/colors';
@@ -34,19 +34,20 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
 
   const activeReminders = reminders.filter((r) => r.enabled);
 
-  const initialRegion = userLocation
-    ? {
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        latitudeDelta: MAP_DELTA,
-        longitudeDelta: MAP_DELTA,
-      }
-    : {
-        latitude: 50.9375,
-        longitude: 6.9603,
-        latitudeDelta: MAP_DELTA,
-        longitudeDelta: MAP_DELTA,
-      };
+  if (!userLocation) {
+    return (
+      <View style={[styles.container, styles.loading]}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const initialRegion = {
+    latitude: userLocation.latitude,
+    longitude: userLocation.longitude,
+    latitudeDelta: MAP_DELTA,
+    longitudeDelta: MAP_DELTA,
+  };
 
   return (
     <View style={styles.container}>
@@ -83,9 +84,13 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
 const styles = StyleSheet.create({
   container: {
     height: '30%',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     backgroundColor: colors.slate100,
+  },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   map: {
     flex: 1,

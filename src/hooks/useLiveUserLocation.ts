@@ -25,6 +25,32 @@ export function useLiveUserLocation(): Coordinate | null {
         return;
       }
 
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown && !cancelled) {
+        setCoordinate({
+          latitude: lastKnown.coords.latitude,
+          longitude: lastKnown.coords.longitude,
+        });
+      }
+
+      try {
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Accuracy.Balanced,
+        });
+        if (!cancelled) {
+          setCoordinate({
+            latitude: current.coords.latitude,
+            longitude: current.coords.longitude,
+          });
+        }
+      } catch {
+        // Keep last-known position if a fresh fix is unavailable.
+      }
+
+      if (cancelled) {
+        return;
+      }
+
       subscription = await Location.watchPositionAsync(
         {
           accuracy: Accuracy.Balanced,
