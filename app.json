@@ -76,7 +76,8 @@
         {
           "enableBackgroundPlayback": true
         }
-      ]
+      ],
+      "./plugins/withGeofenceAlarmFullScreen.js"
     ],
     "extra": {
       "eas": {

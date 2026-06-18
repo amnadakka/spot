@@ -54,6 +54,7 @@ export async function fireGeofenceAlarmImmediate(
       sticky: true,
       autoDismiss: false,
       vibrate: [0, 500, 200, 500, 200, 500],
+      ...(Platform.OS === 'ios' ? { interruptionLevel: 'timeSensitive' as const } : {}),
       data: {
         type: 'geofence_enter',
         regionId: primaryRegionId,

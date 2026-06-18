@@ -12,6 +12,11 @@ import {
   getActiveVisitBatchSync,
   loadVisitBatch,
 } from '../storage/geofenceVisitBatch';
+import {
+  clearPendingGeofenceAlarm,
+  getPendingGeofenceAlarmSync,
+  loadPendingGeofenceAlarm,
+} from '../storage/pendingGeofenceAlarm';
 
 function getRegionIdsFromGeofenceData(data: Record<string, unknown>): string[] {
   if (Array.isArray(data.regionIds)) {
@@ -60,17 +65,24 @@ function resolveAlarmFromNotificationData(data: Record<string, unknown>): Active
     return resolveAlarmFromRegionIds(batch.regionIds, batch.startedAt);
   }
 
+  const pending = getPendingGeofenceAlarmSync();
+  if (pending && pending.regionIds.length > regionIds.length) {
+    return resolveAlarmFromRegionIds(pending.regionIds, pending.startedAt);
+  }
+
   const batchStartedAt =
-    typeof data.batchStartedAt === 'number' ? data.batchStartedAt : batch?.startedAt;
+    typeof data.batchStartedAt === 'number'
+      ? data.batchStartedAt
+      : pending?.startedAt ?? batch?.startedAt;
 
   return resolveAlarmFromRegionIds(regionIds, batchStartedAt);
 }
 
 /**
  * Starts looping in-app alarm playback when a geofence reminder fires while the
- * JS runtime is alive. When the app was backgrounded, the OS notification still
- * rings; returning to the app (without tapping the notification) restores the
- * full-screen alarm from the active visit batch or any pending geofence alert.
+ * JS runtime is alive. When the phone was locked or the app was backgrounded, the OS
+ * notification still rings; opening or unlocking into the app restores the full-screen
+ * alarm from the pending alarm record, visit batch, or notification tray.
  */
 export function useGeofenceAlarmRinging(
   onViewSpot: (regionId: string, options?: { triggeredAt?: string | null }) => void,
@@ -114,6 +126,7 @@ export function useGeofenceAlarmRinging(
   const dismissActiveAlarm = useCallback(() => {
     setActiveAlarm(null);
     clearVisitBatch();
+    void clearPendingGeofenceAlarm();
 
     if (isExpoGoAndroid()) {
       return;
@@ -141,7 +154,17 @@ export function useGeofenceAlarmRinging(
   const startAlarmForRegion = useCallback(
     (regionId: string) => {
       InteractionManager.runAfterInteractions(() => {
-        void Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]).then(() => {
+        void Promise.all([
+          loadGeofenceReminderMetadata(),
+          loadVisitBatch(),
+          loadPendingGeofenceAlarm(),
+        ]).then(() => {
+          const pending = getPendingGeofenceAlarmSync();
+          if (pending) {
+            startAlarm(resolveAlarmFromRegionIds(pending.regionIds, pending.startedAt));
+            return;
+          }
+
           const batch = getActiveVisitBatchSync();
           const regionIds =
             batch && batch.regionIds.includes(regionId) ? batch.regionIds : [regionId];
@@ -167,7 +190,11 @@ export function useGeofenceAlarmRinging(
         return;
       }
 
-      await Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]);
+      await Promise.all([
+        loadGeofenceReminderMetadata(),
+        loadVisitBatch(),
+        loadPendingGeofenceAlarm(),
+      ]);
 
       const alarm = resolveAlarmFromNotificationData(data);
       if (alarm) {
@@ -208,9 +235,19 @@ export function useGeofenceAlarmRinging(
         return;
       }
 
-      await Promise.all([loadGeofenceReminderMetadata(), loadVisitBatch()]);
+      await Promise.all([
+        loadGeofenceReminderMetadata(),
+        loadVisitBatch(),
+        loadPendingGeofenceAlarm(),
+      ]);
 
       if (cancelled || activeAlarmRef.current) {
+        return;
+      }
+
+      const pending = getPendingGeofenceAlarmSync();
+      if (pending) {
+        startAlarm(resolveAlarmFromRegionIds(pending.regionIds, pending.startedAt));
         return;
       }
 
