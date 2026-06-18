@@ -9,6 +9,7 @@ const METADATA_KEY = '@geofence_reminder_metadata_v1';
 export type GeofenceReminderMetadata = {
   title: string;
   address: string;
+  description?: string;
 };
 
 let metadataCache: Record<string, GeofenceReminderMetadata> = {};
@@ -51,7 +52,14 @@ export async function persistGeofenceReminderTitles(reminders: Reminder[]): Prom
 
   const titles = Object.fromEntries(reminders.map((r) => [r.id, r.title]));
   const metadata = Object.fromEntries(
-    reminders.map((r) => [r.id, { title: r.title, address: r.address } satisfies GeofenceReminderMetadata]),
+    reminders.map((r) => [
+      r.id,
+      {
+        title: r.title,
+        address: r.address,
+        description: r.description?.trim() || undefined,
+      } satisfies GeofenceReminderMetadata,
+    ]),
   );
 
   metadataCache = metadata;

@@ -72,8 +72,9 @@ export async function appendGeofenceEnterHistory(params: {
   triggeredAt: string;
   spotTitle?: string;
   address?: string;
+  description?: string;
 }): Promise<void> {
-  const { regionId, latitude, longitude, triggeredAt, spotTitle, address } = params;
+  const { regionId, latitude, longitude, triggeredAt, spotTitle, address, description } = params;
 
   const existing = await loadHistory();
   if (hasRecentHistoryForRegion(existing, regionId, triggeredAt)) {
@@ -89,16 +90,22 @@ export async function appendGeofenceEnterHistory(params: {
     latitude,
     longitude,
     radiusMeters: DEFAULT_REMINDER_RADIUS_METERS,
+    description: description?.trim() || undefined,
   });
 }
 
 export async function deleteHistoryEvent(eventId: string): Promise<void> {
-  if (Platform.OS === 'web') {
+  await deleteHistoryEvents([eventId]);
+}
+
+export async function deleteHistoryEvents(eventIds: string[]): Promise<void> {
+  if (Platform.OS === 'web' || eventIds.length === 0) {
     return;
   }
 
+  const idSet = new Set(eventIds);
   const existing = await loadHistory();
-  const next = existing.filter((event) => event.id !== eventId);
+  const next = existing.filter((event) => !idSet.has(event.id));
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
 

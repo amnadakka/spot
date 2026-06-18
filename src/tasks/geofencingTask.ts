@@ -97,6 +97,7 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
       triggeredAt: new Date().toISOString(),
       spotTitle: metadata?.title,
       address: metadata?.address,
+      description: metadata?.description,
     });
   } catch (e) {
     console.warn('[Geofencing] History write failed:', e);

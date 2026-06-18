@@ -17,7 +17,7 @@ import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { loadReminders, saveReminders } from '../storage/reminders';
-import { deleteHistoryEvent, reminderFromHistoryEvent } from '../storage/history';
+import { deleteHistoryEvent, deleteHistoryEvents, reminderFromHistoryEvent } from '../storage/history';
 import { colors } from '../theme/colors';
 import type { Reminder } from '../types/reminder';
 import type { HistoryEvent } from '../types/history';
@@ -170,6 +170,13 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     });
   }, []);
 
+  const handleDeleteHistoryEvents = useCallback((eventIds: string[]) => {
+    void deleteHistoryEvents(eventIds).catch((error) => {
+      console.warn('[History] Bulk delete failed:', error);
+      setHistoryRefreshKey((key) => key + 1);
+    });
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({ navigateToSpotDetail }),
@@ -209,6 +216,11 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
 
   const handleDelete = useCallback((id: string) => {
     setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+  }, []);
+
+  const handleDeleteMany = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setReminders((prev) => prev.filter((reminder) => !idSet.has(reminder.id)));
   }, []);
 
   const handleAdd = useCallback(() => {
@@ -357,6 +369,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
                   reminders={reminders}
                   onToggle={handleToggle}
                   onDelete={handleDelete}
+                  onDeleteMany={handleDeleteMany}
                   onAdd={handleAdd}
                   onSpotPress={navigateToSpotDetail}
                   addDisabled={atSpotLimit}
@@ -372,6 +385,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
             refreshKey={historyRefreshKey}
             onEventPress={navigateFromHistoryEvent}
             onDeleteEvent={handleDeleteHistoryEvent}
+            onDeleteEvents={handleDeleteHistoryEvents}
           />
         )}
 

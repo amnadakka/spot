@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 import { appendGeofenceEnterHistory } from './history';
-import { loadGeofenceReminderMetadata } from './geofenceReminderTitles';
+import { loadGeofenceReminderMetadata, type GeofenceReminderMetadata } from './geofenceReminderTitles';
 import { loadReminders } from './reminders';
 
 const PENDING_KEY = '@spot_pending_geofence_events_v1';
@@ -78,7 +78,7 @@ export async function drainPendingHistory(): Promise<void> {
   await AsyncStorage.removeItem(PENDING_KEY).catch(() => {});
 
   // Now do the "heavy" work — fine because we're in the foreground.
-  let metadata: Record<string, { title: string; address: string }> = {};
+  let metadata: Record<string, GeofenceReminderMetadata> = {};
   let remindersById: Record<string, Awaited<ReturnType<typeof loadReminders>>[number]> = {};
   try {
     metadata = await loadGeofenceReminderMetadata();
@@ -104,6 +104,7 @@ export async function drainPendingHistory(): Promise<void> {
         triggeredAt: stub.triggeredAt,
         spotTitle: reminder?.title ?? spot?.title,
         address: reminder?.address ?? spot?.address,
+        description: reminder?.description ?? spot?.description,
       });
     } catch {
       // Individual event failure shouldn't block the rest.
