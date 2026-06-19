@@ -19,10 +19,9 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { loadReminders, saveReminders } from '../storage/reminders';
 import { deleteHistoryEvent, deleteHistoryEvents, reminderFromHistoryEvent } from '../storage/history';
 import { colors } from '../theme/colors';
-import type { Reminder } from '../types/reminder';
+import type { Reminder, ReminderRadiusMeters } from '../types/reminder';
 import type { HistoryEvent } from '../types/history';
 import {
-  DEFAULT_REMINDER_RADIUS_METERS,
   MAX_ACTIVE_SPOTS,
   MAX_ACTIVE_SPOTS_MESSAGE,
 } from '../types/reminder';
@@ -238,7 +237,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   const saveNewReminder = useCallback(
-    (title: string, description: string) => {
+    (title: string, description: string, radiusMeters: ReminderRadiusMeters) => {
       if (!pickedLocation) {
         return;
       }
@@ -250,7 +249,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         address: pickedLocation.address,
         latitude: pickedLocation.latitude,
         longitude: pickedLocation.longitude,
-        radiusMeters: DEFAULT_REMINDER_RADIUS_METERS,
+        radiusMeters,
         enabled: true,
         createdAt: new Date().toISOString(),
       };
@@ -264,7 +263,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   );
 
   const handleConfirm = useCallback(
-    (title: string, description: string) => {
+    (title: string, description: string, radiusMeters: ReminderRadiusMeters) => {
       if (!pickedLocation) {
         return;
       }
@@ -275,19 +274,19 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         return;
       }
 
-      const conflict = findOverlappingActiveReminder(reminders, pickedLocation);
+      const conflict = findOverlappingActiveReminder(reminders, pickedLocation, { radiusMeters });
       if (conflict) {
         Alert.alert('Overlapping range', activeSpotOverlapWarningMessage(conflict), [
           { text: 'Go back', style: 'cancel' },
           {
             text: 'Save anyway',
-            onPress: () => saveNewReminder(title, description),
+            onPress: () => saveNewReminder(title, description, radiusMeters),
           },
         ]);
         return;
       }
 
-      saveNewReminder(title, description);
+      saveNewReminder(title, description, radiusMeters);
     },
     [pickedLocation, reminders, saveNewReminder],
   );

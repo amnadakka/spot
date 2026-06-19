@@ -13,19 +13,27 @@ import {
 
 import { colors } from '../theme/colors';
 import { radii, spacing } from '../theme/spacing';
-import { MAX_DESCRIPTION_LENGTH } from '../types/reminder';
+import {
+  DEFAULT_REMINDER_RADIUS_METERS,
+  MAX_DESCRIPTION_LENGTH,
+  REMINDER_RADIUS_OPTIONS,
+  type ReminderRadiusMeters,
+} from '../types/reminder';
 
 import type { PickedLocation } from './MapPickerScreen';
 
 type AddSpotFormProps = {
   location: PickedLocation;
-  onConfirm: (title: string, description: string) => void;
+  onConfirm: (title: string, description: string, radiusMeters: ReminderRadiusMeters) => void;
   onDiscard: () => void;
 };
 
 export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [radiusMeters, setRadiusMeters] = useState<ReminderRadiusMeters>(
+    DEFAULT_REMINDER_RADIUS_METERS,
+  );
 
   const isValid = title.trim().length > 0;
 
@@ -66,6 +74,33 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
         </View>
 
         <View style={styles.field}>
+          <Text style={styles.fieldLabel}>REMINDER RANGE</Text>
+          <View style={styles.rangeRow}>
+            {REMINDER_RADIUS_OPTIONS.map((option) => {
+              const selected = radiusMeters === option;
+              return (
+                <Pressable
+                  key={option}
+                  style={({ pressed }) => [
+                    styles.rangeOption,
+                    selected && styles.rangeOptionSelected,
+                    pressed && styles.rangeOptionPressed,
+                  ]}
+                  onPress={() => setRadiusMeters(option)}
+                >
+                  <Text style={[styles.rangeOptionLabel, selected && styles.rangeOptionLabelSelected]}>
+                    {option} m
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.rangeHint}>
+            You'll be reminded when you're within {radiusMeters} meters of this spot.
+          </Text>
+        </View>
+
+        <View style={styles.field}>
           <View style={styles.descHeader}>
             <Text style={styles.fieldLabel}>
               DESCRIPTION <Text style={styles.optional}>(optional)</Text>
@@ -100,7 +135,7 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
             isValid ? styles.confirmBtnActive : styles.confirmBtnDisabled,
             pressed && isValid && styles.confirmBtnPressed,
           ]}
-          onPress={() => isValid && onConfirm(title.trim(), description.trim())}
+          onPress={() => isValid && onConfirm(title.trim(), description.trim(), radiusMeters)}
           disabled={!isValid}
         >
           <Text style={[styles.confirmLabel, !isValid && styles.confirmLabelDisabled]}>
@@ -157,6 +192,40 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: 6,
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  rangeOption: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radii.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  rangeOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  rangeOptionPressed: {
+    opacity: 0.85,
+  },
+  rangeOptionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.slate500,
+  },
+  rangeOptionLabelSelected: {
+    color: colors.primary,
+  },
+  rangeHint: {
+    fontSize: 12,
+    color: colors.slate400,
+    paddingHorizontal: 4,
+    lineHeight: 16,
   },
   descHeader: {
     flexDirection: 'row',

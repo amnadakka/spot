@@ -11,7 +11,11 @@ export type Reminder = {
   createdAt: string;
 };
 
-export const DEFAULT_REMINDER_RADIUS_METERS = 200;
+export const REMINDER_RADIUS_OPTIONS = [50, 100, 150, 200] as const;
+
+export type ReminderRadiusMeters = (typeof REMINDER_RADIUS_OPTIONS)[number];
+
+export const DEFAULT_REMINDER_RADIUS_METERS: ReminderRadiusMeters = 200;
 
 export const MAX_DESCRIPTION_LENGTH = 100;
 

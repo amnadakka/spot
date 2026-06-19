@@ -105,6 +105,7 @@ export async function drainPendingHistory(): Promise<void> {
         spotTitle: reminder?.title ?? spot?.title,
         address: reminder?.address ?? spot?.address,
         description: reminder?.description ?? spot?.description,
+        radiusMeters: reminder?.radiusMeters ?? spot?.radiusMeters,
       });
     } catch {
       // Individual event failure shouldn't block the rest.

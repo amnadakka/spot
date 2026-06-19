@@ -73,8 +73,18 @@ export async function appendGeofenceEnterHistory(params: {
   spotTitle?: string;
   address?: string;
   description?: string;
+  radiusMeters?: number;
 }): Promise<void> {
-  const { regionId, latitude, longitude, triggeredAt, spotTitle, address, description } = params;
+  const {
+    regionId,
+    latitude,
+    longitude,
+    triggeredAt,
+    spotTitle,
+    address,
+    description,
+    radiusMeters,
+  } = params;
 
   const existing = await loadHistory();
   if (hasRecentHistoryForRegion(existing, regionId, triggeredAt)) {
@@ -89,7 +99,7 @@ export async function appendGeofenceEnterHistory(params: {
     triggeredAt,
     latitude,
     longitude,
-    radiusMeters: DEFAULT_REMINDER_RADIUS_METERS,
+    radiusMeters: radiusMeters ?? DEFAULT_REMINDER_RADIUS_METERS,
     description: description?.trim() || undefined,
   });
 }
