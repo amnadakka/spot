@@ -3,38 +3,51 @@ import { useEffect, useRef } from 'react';
 import { syncAllScheduledReminderNotifications } from '../services/scheduledReminderNotifications';
 import type { Reminder } from '../types/reminder';
 
+export type ScheduledNotificationIdUpdate = {
+  id: string;
+  scheduledNotificationId: string | undefined;
+};
+
 type UseScheduledReminderSyncOptions = {
-  onRemindersUpdated?: (reminders: Reminder[]) => void;
+  onNotificationIdsUpdated?: (updates: ScheduledNotificationIdUpdate[]) => void;
 };
 
 /** Keeps time-based reminder notifications aligned with in-memory reminders. */
 export function useScheduledReminderSync(
   reminders: Reminder[],
-  { onRemindersUpdated }: UseScheduledReminderSyncOptions = {},
+  { onNotificationIdsUpdated }: UseScheduledReminderSyncOptions = {},
 ) {
-  const syncingRef = useRef(false);
+  const syncGenerationRef = useRef(0);
 
   useEffect(() => {
-    if (syncingRef.current) {
-      return;
-    }
+    const generation = ++syncGenerationRef.current;
+    const snapshot = reminders;
 
-    syncingRef.current = true;
-    void syncAllScheduledReminderNotifications(reminders)
-      .then((nextReminders) => {
-        const changed = nextReminders.some((reminder, index) => {
-          return reminder.scheduledNotificationId !== reminders[index]?.scheduledNotificationId;
+    void syncAllScheduledReminderNotifications(snapshot)
+      .then((synced) => {
+        if (generation !== syncGenerationRef.current) {
+          return;
+        }
+
+        const snapshotIds = new Set(snapshot.map((reminder) => reminder.id));
+        const updates: ScheduledNotificationIdUpdate[] = synced
+          .filter((reminder) => snapshotIds.has(reminder.id))
+          .map((reminder) => ({
+            id: reminder.id,
+            scheduledNotificationId: reminder.scheduledNotificationId,
+          }));
+
+        const changed = updates.some((update) => {
+          const original = snapshot.find((reminder) => reminder.id === update.id);
+          return original?.scheduledNotificationId !== update.scheduledNotificationId;
         });
 
         if (changed) {
-          onRemindersUpdated?.(nextReminders);
+          onNotificationIdsUpdated?.(updates);
         }
       })
       .catch((error) => {
         console.warn('[ScheduledReminder] Failed to sync notifications:', error);
-      })
-      .finally(() => {
-        syncingRef.current = false;
       });
-  }, [reminders, onRemindersUpdated]);
+  }, [reminders, onNotificationIdsUpdated]);
 }

@@ -32,6 +32,8 @@ type SpotDetailScreenProps = {
   reminder: Reminder;
   /** When opened from history, the local time the geofence notification fired. */
   triggeredAt?: string;
+  /** When false, editing is disabled (e.g. history snapshot for a deleted spot). */
+  allowEdit?: boolean;
   onUpdate?: (
     reminderId: string,
     updates: { description?: string; schedule?: ReminderSchedule },
@@ -43,6 +45,7 @@ const MAP_DELTA = 0.008;
 export default function SpotDetailScreen({
   reminder,
   triggeredAt,
+  allowEdit = true,
   onUpdate,
 }: SpotDetailScreenProps) {
   const mapRef = useRef<MapView>(null);
@@ -55,7 +58,22 @@ export default function SpotDetailScreen({
     setDescription(reminder.description ?? '');
     setSchedule(reminder.schedule ?? {});
     setEditing(false);
-  }, [reminder.id, reminder.description, reminder.schedule]);
+  }, [reminder.id]);
+
+  const savedScheduleKey = [
+    reminder.schedule?.date ?? '',
+    reminder.schedule?.timeStart ?? '',
+    reminder.schedule?.timeEnd ?? '',
+  ].join('|');
+
+  useEffect(() => {
+    if (editing) {
+      return;
+    }
+
+    setDescription(reminder.description ?? '');
+    setSchedule(reminder.schedule ?? {});
+  }, [editing, reminder.description, savedScheduleKey, reminder.schedule]);
 
   const region: Region = {
     latitude: reminder.latitude,
@@ -64,7 +82,7 @@ export default function SpotDetailScreen({
     longitudeDelta: MAP_DELTA,
   };
 
-  const canEdit = Boolean(onUpdate) && !triggeredAt;
+  const canEdit = Boolean(onUpdate) && allowEdit;
 
   const handleSave = () => {
     onUpdate?.(reminder.id, {
@@ -193,7 +211,11 @@ export default function SpotDetailScreen({
 
             <View style={styles.field}>
               <Text style={styles.infoLabel}>Reminder schedule</Text>
-              <ReminderScheduleFields schedule={schedule} onChange={setSchedule} />
+              <ReminderScheduleFields
+                key={reminder.id}
+                schedule={schedule}
+                onChange={setSchedule}
+              />
             </View>
           </>
         ) : (

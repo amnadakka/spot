@@ -1,6 +1,6 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
@@ -38,8 +38,20 @@ export default function ReminderScheduleFields({
   const [dateEnabled, setDateEnabled] = useState(Boolean(schedule.date));
   const [activePicker, setActivePicker] = useState<PickerKind | null>(null);
   const [pickerDate, setPickerDate] = useState(defaultTimeDate);
+  const activePickerRef = useRef<PickerKind | null>(null);
+
+  useEffect(() => {
+    setTimeEnabled(Boolean(schedule.timeStart || schedule.timeEnd));
+    setDateEnabled(Boolean(schedule.date));
+  }, [schedule.timeStart, schedule.timeEnd, schedule.date]);
+
+  const closePicker = () => {
+    activePickerRef.current = null;
+    setActivePicker(null);
+  };
 
   const openPicker = (kind: PickerKind) => {
+    activePickerRef.current = kind;
     if (kind === 'date') {
       setPickerDate(
         schedule.date ? dateFromScheduleDate(schedule.date) ?? new Date() : new Date(),
@@ -52,26 +64,41 @@ export default function ReminderScheduleFields({
     setActivePicker(kind);
   };
 
-  const handlePickerChange = (_event: unknown, selected?: Date) => {
-    if (Platform.OS === 'android') {
-      setActivePicker(null);
-    }
-
-    if (!selected || !activePicker) {
-      return;
-    }
-
-    if (activePicker === 'date') {
+  const applyPickerValue = (kind: PickerKind, selected: Date) => {
+    if (kind === 'date') {
       onChange({ ...schedule, date: formatDateFromDate(selected) });
       return;
     }
 
-    if (activePicker === 'timeStart') {
+    if (kind === 'timeStart') {
       onChange({ ...schedule, timeStart: formatTimeFromDate(selected) });
       return;
     }
 
     onChange({ ...schedule, timeEnd: formatTimeFromDate(selected) });
+  };
+
+  const handlePickerChange = (event: DateTimePickerEvent, selected?: Date) => {
+    const kind = activePickerRef.current;
+    if (!kind) {
+      return;
+    }
+
+    if (Platform.OS === 'android') {
+      closePicker();
+      if (event.type === 'dismissed' || !selected) {
+        return;
+      }
+      applyPickerValue(kind, selected);
+      return;
+    }
+
+    if (!selected) {
+      return;
+    }
+
+    setPickerDate(selected);
+    applyPickerValue(kind, selected);
   };
 
   const toggleTimeEnabled = () => {
@@ -205,7 +232,7 @@ export default function ReminderScheduleFields({
           {Platform.OS === 'ios' ? (
             <Pressable
               style={({ pressed }) => [styles.pickerDoneBtn, pressed && styles.timeFieldPressed]}
-              onPress={() => setActivePicker(null)}
+              onPress={closePicker}
             >
               <Text style={styles.pickerDoneLabel}>Done</Text>
             </Pressable>

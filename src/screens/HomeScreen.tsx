@@ -71,8 +71,49 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const liveUserLocation = useLiveUserLocation();
   const occupiedSpotIds = useOccupiedSpotIds(reminders, liveUserLocation);
   useReminderGeofencingSync(reminders);
+
+  const handleScheduledNotificationSync = useCallback(
+    (updates: Array<{ id: string; scheduledNotificationId: string | undefined }>) => {
+      const updateMap = new Map(updates.map((update) => [update.id, update.scheduledNotificationId]));
+
+      setReminders((prev) => {
+        let changed = false;
+
+        const next = prev.map((reminder) => {
+          if (!updateMap.has(reminder.id)) {
+            return reminder;
+          }
+
+          const scheduledNotificationId = updateMap.get(reminder.id);
+          if (reminder.scheduledNotificationId === scheduledNotificationId) {
+            return reminder;
+          }
+
+          changed = true;
+          return { ...reminder, scheduledNotificationId };
+        });
+
+        return changed ? next : prev;
+      });
+
+      setSelectedReminder((current) => {
+        if (!current || !updateMap.has(current.id)) {
+          return current;
+        }
+
+        const scheduledNotificationId = updateMap.get(current.id);
+        if (current.scheduledNotificationId === scheduledNotificationId) {
+          return current;
+        }
+
+        return { ...current, scheduledNotificationId };
+      });
+    },
+    [],
+  );
+
   useScheduledReminderSync(reminders, {
-    onRemindersUpdated: setReminders,
+    onNotificationIdsUpdated: handleScheduledNotificationSync,
   });
 
   useEffect(() => {
@@ -168,17 +209,25 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   );
 
   const handleDeleteHistoryEvent = useCallback((eventId: string) => {
-    void deleteHistoryEvent(eventId).catch((error) => {
-      console.warn('[History] Delete failed:', error);
-      setHistoryRefreshKey((key) => key + 1);
-    });
+    void deleteHistoryEvent(eventId)
+      .then(() => {
+        setHistoryRefreshKey((key) => key + 1);
+      })
+      .catch((error) => {
+        console.warn('[History] Delete failed:', error);
+        setHistoryRefreshKey((key) => key + 1);
+      });
   }, []);
 
   const handleDeleteHistoryEvents = useCallback((eventIds: string[]) => {
-    void deleteHistoryEvents(eventIds).catch((error) => {
-      console.warn('[History] Bulk delete failed:', error);
-      setHistoryRefreshKey((key) => key + 1);
-    });
+    void deleteHistoryEvents(eventIds)
+      .then(() => {
+        setHistoryRefreshKey((key) => key + 1);
+      })
+      .catch((error) => {
+        console.warn('[History] Bulk delete failed:', error);
+        setHistoryRefreshKey((key) => key + 1);
+      });
   }, []);
 
   useImperativeHandle(
@@ -460,8 +509,11 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
 
         {screen === 'detail' && selectedReminder ? (
           <SpotDetailScreen
-            reminder={selectedReminder}
+            reminder={
+              reminders.find((reminder) => reminder.id === selectedReminder.id) ?? selectedReminder
+            }
             triggeredAt={detailTriggeredAt ?? undefined}
+            allowEdit={reminders.some((reminder) => reminder.id === selectedReminder.id)}
             onUpdate={handleUpdateReminder}
           />
         ) : null}
