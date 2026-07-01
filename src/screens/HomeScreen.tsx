@@ -15,11 +15,13 @@ import SpotList from '../components/SpotList';
 import { useLiveUserLocation } from '../hooks/useLiveUserLocation';
 import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
+import { useScheduledReminderSync } from '../hooks/useScheduledReminderSync';
 import { useUserLocation } from '../hooks/useUserLocation';
+import { cancelScheduledReminderNotification } from '../services/scheduledReminderNotifications';
 import { loadReminders, saveReminders } from '../storage/reminders';
 import { deleteHistoryEvent, deleteHistoryEvents, reminderFromHistoryEvent } from '../storage/history';
 import { colors } from '../theme/colors';
-import type { Reminder, ReminderRadiusMeters } from '../types/reminder';
+import type { Reminder, ReminderRadiusMeters, ReminderSchedule } from '../types/reminder';
 import type { HistoryEvent } from '../types/history';
 import {
   MAX_ACTIVE_SPOTS,
@@ -69,6 +71,9 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const liveUserLocation = useLiveUserLocation();
   const occupiedSpotIds = useOccupiedSpotIds(reminders, liveUserLocation);
   useReminderGeofencingSync(reminders);
+  useScheduledReminderSync(reminders, {
+    onRemindersUpdated: setReminders,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -214,13 +219,57 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   const handleDelete = useCallback((id: string) => {
-    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+    setReminders((prev) => {
+      const target = prev.find((reminder) => reminder.id === id);
+      if (target?.scheduledNotificationId) {
+        void cancelScheduledReminderNotification(target.scheduledNotificationId);
+      }
+      return prev.filter((reminder) => reminder.id !== id);
+    });
   }, []);
 
   const handleDeleteMany = useCallback((ids: string[]) => {
     const idSet = new Set(ids);
-    setReminders((prev) => prev.filter((reminder) => !idSet.has(reminder.id)));
+    setReminders((prev) => {
+      for (const reminder of prev) {
+        if (idSet.has(reminder.id) && reminder.scheduledNotificationId) {
+          void cancelScheduledReminderNotification(reminder.scheduledNotificationId);
+        }
+      }
+      return prev.filter((reminder) => !idSet.has(reminder.id));
+    });
   }, []);
+
+  const handleUpdateReminder = useCallback(
+    (reminderId: string, updates: { description?: string; schedule?: ReminderSchedule }) => {
+      setReminders((prev) =>
+        prev.map((reminder) => {
+          if (reminder.id !== reminderId) {
+            return reminder;
+          }
+
+          return {
+            ...reminder,
+            description: updates.description,
+            schedule: updates.schedule,
+          };
+        }),
+      );
+
+      setSelectedReminder((current) => {
+        if (!current || current.id !== reminderId) {
+          return current;
+        }
+
+        return {
+          ...current,
+          description: updates.description,
+          schedule: updates.schedule,
+        };
+      });
+    },
+    [],
+  );
 
   const handleAdd = useCallback(() => {
     const activeCount = reminders.filter((reminder) => reminder.enabled).length;
@@ -237,7 +286,12 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   const saveNewReminder = useCallback(
-    (title: string, description: string, radiusMeters: ReminderRadiusMeters) => {
+    (
+      title: string,
+      description: string,
+      radiusMeters: ReminderRadiusMeters,
+      schedule?: ReminderSchedule,
+    ) => {
       if (!pickedLocation) {
         return;
       }
@@ -252,6 +306,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         radiusMeters,
         enabled: true,
         createdAt: new Date().toISOString(),
+        schedule,
       };
 
       setReminders((prev) => [newReminder, ...prev]);
@@ -263,7 +318,12 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   );
 
   const handleConfirm = useCallback(
-    (title: string, description: string, radiusMeters: ReminderRadiusMeters) => {
+    (
+      title: string,
+      description: string,
+      radiusMeters: ReminderRadiusMeters,
+      schedule?: ReminderSchedule,
+    ) => {
       if (!pickedLocation) {
         return;
       }
@@ -280,13 +340,13 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
           { text: 'Go back', style: 'cancel' },
           {
             text: 'Save anyway',
-            onPress: () => saveNewReminder(title, description, radiusMeters),
+            onPress: () => saveNewReminder(title, description, radiusMeters, schedule),
           },
         ]);
         return;
       }
 
-      saveNewReminder(title, description, radiusMeters);
+      saveNewReminder(title, description, radiusMeters, schedule);
     },
     [pickedLocation, reminders, saveNewReminder],
   );
@@ -402,6 +462,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
           <SpotDetailScreen
             reminder={selectedReminder}
             triggeredAt={detailTriggeredAt ?? undefined}
+            onUpdate={handleUpdateReminder}
           />
         ) : null}
       </View>

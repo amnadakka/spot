@@ -27,9 +27,14 @@ export default function App() {
   usePendingHistoryDrain();
   useBatteryOptimizationCheck();
 
-  useNotificationResponseHandler((regionId) => {
-    startAlarmForRegion(regionId);
-  });
+  useNotificationResponseHandler(
+    (regionId) => {
+      startAlarmForRegion(regionId);
+    },
+    (regionId) => {
+      homeRef.current?.navigateToSpotDetail(regionId);
+    },
+  );
 
   return (
     <SafeAreaProvider>

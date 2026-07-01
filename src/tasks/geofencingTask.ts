@@ -17,6 +17,7 @@ import * as TaskManager from 'expo-task-manager';
 import { fireGeofenceAlarmImmediate } from '../notifications/showGeofenceEnterNotification';
 import { getGeofenceReminderMetadataSync } from '../storage/geofenceReminderTitles';
 import { persistPendingGeofenceAlarm } from '../storage/pendingGeofenceAlarm';
+import { isScheduleActiveNow } from '../utils/reminderSchedule';
 import {
   clearEnterNotification,
   ensureEnterDedupHydrated,
@@ -76,11 +77,16 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
   const visit = registerVisitEnter(regionId);
 
   if (visit.shouldFireAlarm) {
-    try {
-      await fireGeofenceAlarmImmediate(visit.regionIds, visit.startedAt);
-      await persistPendingGeofenceAlarm(visit.regionIds, visit.startedAt);
-    } catch (e) {
-      console.warn('[Geofencing] Alarm failed:', e);
+    const metadata = getGeofenceReminderMetadataSync(regionId);
+    const scheduleActive = isScheduleActiveNow(metadata?.schedule);
+
+    if (scheduleActive) {
+      try {
+        await fireGeofenceAlarmImmediate(visit.regionIds, visit.startedAt);
+        await persistPendingGeofenceAlarm(visit.regionIds, visit.startedAt);
+      } catch (e) {
+        console.warn('[Geofencing] Alarm failed:', e);
+      }
     }
   }
 

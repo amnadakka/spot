@@ -18,13 +18,21 @@ import {
   MAX_DESCRIPTION_LENGTH,
   REMINDER_RADIUS_OPTIONS,
   type ReminderRadiusMeters,
+  type ReminderSchedule,
 } from '../types/reminder';
+import { normalizeSchedule } from '../utils/reminderSchedule';
 
 import type { PickedLocation } from './MapPickerScreen';
+import ReminderScheduleFields from './ReminderScheduleFields';
 
 type AddSpotFormProps = {
   location: PickedLocation;
-  onConfirm: (title: string, description: string, radiusMeters: ReminderRadiusMeters) => void;
+  onConfirm: (
+    title: string,
+    description: string,
+    radiusMeters: ReminderRadiusMeters,
+    schedule?: ReminderSchedule,
+  ) => void;
   onDiscard: () => void;
 };
 
@@ -34,6 +42,7 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
   const [radiusMeters, setRadiusMeters] = useState<ReminderRadiusMeters>(
     DEFAULT_REMINDER_RADIUS_METERS,
   );
+  const [schedule, setSchedule] = useState<ReminderSchedule>({});
 
   const isValid = title.trim().length > 0;
 
@@ -100,6 +109,8 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
           </Text>
         </View>
 
+        <ReminderScheduleFields schedule={schedule} onChange={setSchedule} />
+
         <View style={styles.field}>
           <View style={styles.descHeader}>
             <Text style={styles.fieldLabel}>
@@ -135,7 +146,10 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
             isValid ? styles.confirmBtnActive : styles.confirmBtnDisabled,
             pressed && isValid && styles.confirmBtnPressed,
           ]}
-          onPress={() => isValid && onConfirm(title.trim(), description.trim(), radiusMeters)}
+          onPress={() =>
+            isValid &&
+            onConfirm(title.trim(), description.trim(), radiusMeters, normalizeSchedule(schedule))
+          }
           disabled={!isValid}
         >
           <Text style={[styles.confirmLabel, !isValid && styles.confirmLabelDisabled]}>

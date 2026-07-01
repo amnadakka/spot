@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-import type { Reminder } from '../types/reminder';
+import type { Reminder, ReminderSchedule } from '../types/reminder';
 import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
 const TITLES_KEY = '@geofence_reminder_titles_v1';
@@ -12,6 +12,7 @@ export type GeofenceReminderMetadata = {
   address: string;
   description?: string;
   radiusMeters: number;
+  schedule?: ReminderSchedule;
 };
 
 let metadataCache: Record<string, GeofenceReminderMetadata> = {};
@@ -61,6 +62,7 @@ export async function persistGeofenceReminderTitles(reminders: Reminder[]): Prom
         address: r.address,
         description: r.description?.trim() || undefined,
         radiusMeters: r.radiusMeters,
+        schedule: r.schedule,
       } satisfies GeofenceReminderMetadata,
     ]),
   );

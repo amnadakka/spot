@@ -1,30 +1,83 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import MapView, { Circle, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
 import { colors } from '../theme/colors';
 import { radii, spacing } from '../theme/spacing';
-import type { Reminder } from '../types/reminder';
+import {
+  MAX_DESCRIPTION_LENGTH,
+  type Reminder,
+  type ReminderSchedule,
+} from '../types/reminder';
 import { formatLocalDateTime } from '../utils/formatLocalDateTime';
+import {
+  formatScheduleDateLabel,
+  formatScheduleTimeLabel,
+  hasScheduleTiming,
+  normalizeSchedule,
+} from '../utils/reminderSchedule';
+
+import ReminderScheduleFields from './ReminderScheduleFields';
 
 type SpotDetailScreenProps = {
   reminder: Reminder;
   /** When opened from history, the local time the geofence notification fired. */
   triggeredAt?: string;
+  onUpdate?: (
+    reminderId: string,
+    updates: { description?: string; schedule?: ReminderSchedule },
+  ) => void;
 };
 
 const MAP_DELTA = 0.008;
 
-export default function SpotDetailScreen({ reminder, triggeredAt }: SpotDetailScreenProps) {
+export default function SpotDetailScreen({
+  reminder,
+  triggeredAt,
+  onUpdate,
+}: SpotDetailScreenProps) {
   const mapRef = useRef<MapView>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [description, setDescription] = useState(reminder.description ?? '');
+  const [schedule, setSchedule] = useState<ReminderSchedule>(reminder.schedule ?? {});
+
+  useEffect(() => {
+    setDescription(reminder.description ?? '');
+    setSchedule(reminder.schedule ?? {});
+    setEditing(false);
+  }, [reminder.id, reminder.description, reminder.schedule]);
 
   const region: Region = {
     latitude: reminder.latitude,
     longitude: reminder.longitude,
     latitudeDelta: MAP_DELTA,
     longitudeDelta: MAP_DELTA,
+  };
+
+  const canEdit = Boolean(onUpdate) && !triggeredAt;
+
+  const handleSave = () => {
+    onUpdate?.(reminder.id, {
+      description: description.trim() || undefined,
+      schedule: normalizeSchedule(schedule),
+    });
+    setEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setDescription(reminder.description ?? '');
+    setSchedule(reminder.schedule ?? {});
+    setEditing(false);
   };
 
   return (
@@ -73,26 +126,137 @@ export default function SpotDetailScreen({ reminder, triggeredAt }: SpotDetailSc
       </View>
 
       <View style={styles.card}>
-        <View style={styles.statusRow}>
-          <View style={[styles.statusDot, reminder.enabled ? styles.statusActive : styles.statusInactive]} />
-          <Text style={styles.statusLabel}>{reminder.enabled ? 'Active' : 'Paused'}</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.statusRow}>
+            <View
+              style={[styles.statusDot, reminder.enabled ? styles.statusActive : styles.statusInactive]}
+            />
+            <Text style={styles.statusLabel}>{reminder.enabled ? 'Active' : 'Paused'}</Text>
+          </View>
+
+          {canEdit ? (
+            editing ? (
+              <View style={styles.editActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.editActionBtn, pressed && styles.editActionBtnPressed]}
+                  onPress={handleCancelEdit}
+                >
+                  <Text style={styles.editActionCancel}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.editActionBtn,
+                    styles.editActionBtnPrimary,
+                    pressed && styles.editActionBtnPrimaryPressed,
+                  ]}
+                  onPress={handleSave}
+                >
+                  <Text style={styles.editActionSave}>Save</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
+                onPress={() => setEditing(true)}
+              >
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
+                <Text style={styles.editBtnLabel}>Edit</Text>
+              </Pressable>
+            )
+          ) : null}
         </View>
 
         <Text style={styles.title}>{reminder.title}</Text>
 
         <View style={styles.divider} />
 
-        <View style={styles.infoRow}>
-          <View style={styles.infoIconWrap}>
-            <Ionicons name="document-text-outline" size={16} color={colors.primary} />
-          </View>
-          <View style={styles.infoTextWrap}>
-            <Text style={styles.infoLabel}>Description</Text>
-            <Text style={[styles.infoValue, !reminder.description && styles.infoValueMuted]}>
-              {reminder.description?.trim() || 'No description'}
-            </Text>
-          </View>
-        </View>
+        {editing ? (
+          <>
+            <View style={styles.field}>
+              <View style={styles.descHeader}>
+                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.counter}>
+                  {description.length}/{MAX_DESCRIPTION_LENGTH}
+                </Text>
+              </View>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Add an optional description…"
+                placeholderTextColor={colors.slate300}
+                value={description}
+                onChangeText={(text) => setDescription(text.slice(0, MAX_DESCRIPTION_LENGTH))}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.infoLabel}>Reminder schedule</Text>
+              <ReminderScheduleFields schedule={schedule} onChange={setSchedule} />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconWrap}>
+                <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={[styles.infoValue, !reminder.description && styles.infoValueMuted]}>
+                  {reminder.description?.trim() || 'No description'}
+                </Text>
+              </View>
+            </View>
+
+            {hasScheduleTiming(reminder.schedule) ? (
+              <>
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIconWrap}>
+                    <Ionicons name="time-outline" size={16} color={colors.primary} />
+                  </View>
+                  <View style={styles.infoTextWrap}>
+                    <Text style={styles.infoLabel}>Reminder time</Text>
+                    <Text style={styles.infoValue}>
+                      {reminder.schedule?.timeStart && reminder.schedule?.timeEnd
+                        ? `Between ${formatScheduleTimeLabel(reminder.schedule.timeStart)} and ${formatScheduleTimeLabel(reminder.schedule.timeEnd)}`
+                        : reminder.schedule?.timeStart
+                          ? `At ${formatScheduleTimeLabel(reminder.schedule.timeStart)}`
+                          : reminder.schedule?.timeEnd
+                            ? `Until ${formatScheduleTimeLabel(reminder.schedule.timeEnd)}`
+                            : 'Not set'}
+                    </Text>
+                  </View>
+                </View>
+
+                {reminder.schedule?.date ? (
+                  <View style={styles.infoRow}>
+                    <View style={styles.infoIconWrap}>
+                      <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.infoTextWrap}>
+                      <Text style={styles.infoLabel}>Reminder date</Text>
+                      <Text style={styles.infoValue}>
+                        {formatScheduleDateLabel(reminder.schedule.date)}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <View style={styles.infoRow}>
+                <View style={styles.infoIconWrap}>
+                  <Ionicons name="time-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>Reminder schedule</Text>
+                  <Text style={[styles.infoValue, styles.infoValueMuted]}>Any time</Text>
+                </View>
+              </View>
+            )}
+          </>
+        )}
 
         <View style={styles.infoRow}>
           <View style={styles.infoIconWrap}>
@@ -202,11 +366,17 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.md,
   },
   statusDot: {
     width: 8,
@@ -226,6 +396,52 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+    backgroundColor: colors.primaryLight,
+  },
+  editBtnPressed: {
+    opacity: 0.85,
+  },
+  editBtnLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  editActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  editActionBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+  },
+  editActionBtnPressed: {
+    opacity: 0.85,
+  },
+  editActionBtnPrimary: {
+    backgroundColor: colors.primary,
+  },
+  editActionBtnPrimaryPressed: {
+    backgroundColor: colors.primaryDark,
+  },
+  editActionCancel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.slate500,
+  },
+  editActionSave: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.surface,
+  },
   title: {
     fontSize: 22,
     fontWeight: '700',
@@ -236,6 +452,33 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginVertical: spacing.lg,
+  },
+  field: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  descHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  counter: {
+    fontSize: 11,
+    color: colors.slate300,
+  },
+  input: {
+    backgroundColor: colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: colors.slate800,
+  },
+  textArea: {
+    minHeight: 96,
+    paddingTop: 14,
   },
   infoRow: {
     flexDirection: 'row',
