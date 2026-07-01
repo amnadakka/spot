@@ -29,7 +29,7 @@ export default function GeofenceAlarmRingingLayer({
   onDismiss,
   onViewSpot,
 }: GeofenceAlarmRingingLayerProps) {
-  const player = useAudioPlayer(require('../../assets/alarm_ringtone.wav'));
+  const player = useAudioPlayer(require('../../assets/alarm.mp3'));
   const spotCount = alarm.spots.length;
   const isGrouped = spotCount > 1;
 
