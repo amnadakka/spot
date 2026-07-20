@@ -1,7 +1,7 @@
 export type ReminderSchedule = {
   /** Local calendar date in YYYY-MM-DD format. */
   date?: string;
-  /** Local time in HH:mm — exact reminder time and start of the active window. */
+  /** Local time in HH:mm — start of the active window when geofence alarms may fire. */
   timeStart?: string;
   /** Local time in HH:mm — end of the active window (optional). */
   timeEnd?: string;
@@ -18,10 +18,8 @@ export type Reminder = {
   radiusMeters: number;
   enabled: boolean;
   createdAt: string;
-  /** Optional date/time window for reminders. */
+  /** Optional date/time window for geofence reminders. */
   schedule?: ReminderSchedule;
-  /** OS notification id for the scheduled time reminder. */
-  scheduledNotificationId?: string;
 };
 
 export const REMINDER_RADIUS_OPTIONS = [50, 100, 150, 200] as const;

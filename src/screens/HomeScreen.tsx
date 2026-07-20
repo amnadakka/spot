@@ -15,9 +15,8 @@ import SpotList from '../components/SpotList';
 import { useLiveUserLocation } from '../hooks/useLiveUserLocation';
 import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
-import { useScheduledReminderSync } from '../hooks/useScheduledReminderSync';
 import { useUserLocation } from '../hooks/useUserLocation';
-import { cancelScheduledReminderNotification } from '../services/scheduledReminderNotifications';
+import { cancelLegacyScheduledNotifications } from '../services/cancelLegacyScheduledNotifications';
 import { loadReminders, saveReminders } from '../storage/reminders';
 import { deleteHistoryEvent, deleteHistoryEvents, reminderFromHistoryEvent } from '../storage/history';
 import { colors } from '../theme/colors';
@@ -72,59 +71,17 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const occupiedSpotIds = useOccupiedSpotIds(reminders, liveUserLocation);
   useReminderGeofencingSync(reminders);
 
-  const handleScheduledNotificationSync = useCallback(
-    (updates: Array<{ id: string; scheduledNotificationId: string | undefined }>) => {
-      const updateMap = new Map(updates.map((update) => [update.id, update.scheduledNotificationId]));
-
-      setReminders((prev) => {
-        let changed = false;
-
-        const next = prev.map((reminder) => {
-          if (!updateMap.has(reminder.id)) {
-            return reminder;
-          }
-
-          const scheduledNotificationId = updateMap.get(reminder.id);
-          if (reminder.scheduledNotificationId === scheduledNotificationId) {
-            return reminder;
-          }
-
-          changed = true;
-          return { ...reminder, scheduledNotificationId };
-        });
-
-        return changed ? next : prev;
-      });
-
-      setSelectedReminder((current) => {
-        if (!current || !updateMap.has(current.id)) {
-          return current;
-        }
-
-        const scheduledNotificationId = updateMap.get(current.id);
-        if (current.scheduledNotificationId === scheduledNotificationId) {
-          return current;
-        }
-
-        return { ...current, scheduledNotificationId };
-      });
-    },
-    [],
-  );
-
-  useScheduledReminderSync(reminders, {
-    onNotificationIdsUpdated: handleScheduledNotificationSync,
-  });
-
   useEffect(() => {
     let cancelled = false;
 
-    void loadReminders().then((loaded) => {
-      if (!cancelled) {
-        setReminders(loaded);
-        setLoading(false);
-      }
-    });
+    void loadReminders()
+      .then((loaded) => cancelLegacyScheduledNotifications(loaded))
+      .then((loaded) => {
+        if (!cancelled) {
+          setReminders(loaded);
+          setLoading(false);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -268,25 +225,12 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   const handleDelete = useCallback((id: string) => {
-    setReminders((prev) => {
-      const target = prev.find((reminder) => reminder.id === id);
-      if (target?.scheduledNotificationId) {
-        void cancelScheduledReminderNotification(target.scheduledNotificationId);
-      }
-      return prev.filter((reminder) => reminder.id !== id);
-    });
+    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
   }, []);
 
   const handleDeleteMany = useCallback((ids: string[]) => {
     const idSet = new Set(ids);
-    setReminders((prev) => {
-      for (const reminder of prev) {
-        if (idSet.has(reminder.id) && reminder.scheduledNotificationId) {
-          void cancelScheduledReminderNotification(reminder.scheduledNotificationId);
-        }
-      }
-      return prev.filter((reminder) => !idSet.has(reminder.id));
-    });
+    setReminders((prev) => prev.filter((reminder) => !idSet.has(reminder.id)));
   }, []);
 
   const handleUpdateReminder = useCallback(

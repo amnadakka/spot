@@ -133,50 +133,6 @@ export function isScheduleActiveNow(schedule?: ReminderSchedule, now = new Date(
   return true;
 }
 
-/** Next local datetime for the exact-time notification (requires timeStart). */
-export function computeScheduledNotificationDate(
-  schedule?: ReminderSchedule,
-  now = new Date(),
-): Date | null {
-  if (!schedule?.timeStart) {
-    return null;
-  }
-
-  const startTime = parseTimeString(schedule.timeStart);
-  if (!startTime) {
-    return null;
-  }
-
-  let baseDate = new Date(now);
-  if (schedule.date) {
-    const scheduledDate = dateFromScheduleDate(schedule.date);
-    if (!scheduledDate) {
-      return null;
-    }
-    baseDate = scheduledDate;
-  }
-
-  const trigger = new Date(
-    baseDate.getFullYear(),
-    baseDate.getMonth(),
-    baseDate.getDate(),
-    startTime.hours,
-    startTime.minutes,
-    0,
-    0,
-  );
-
-  if (!schedule.date && trigger.getTime() <= now.getTime()) {
-    trigger.setDate(trigger.getDate() + 1);
-  }
-
-  if (trigger.getTime() <= now.getTime()) {
-    return null;
-  }
-
-  return trigger;
-}
-
 export function formatScheduleTimeLabel(value?: string): string {
   if (!value) {
     return 'Not set';

@@ -14,16 +14,9 @@ function isGeofenceEnterResponse(data: Record<string, unknown> | undefined): dat
   return data?.type === 'geofence_enter' && typeof data.regionId === 'string';
 }
 
-function isScheduledReminderResponse(data: Record<string, unknown> | undefined): data is {
-  type: 'scheduled_reminder';
-  regionId: string;
-} {
-  return data?.type === 'scheduled_reminder' && typeof data.regionId === 'string';
-}
-
 /**
  * Listens for notification taps (response events). Geofence alarms open the ringing
- * screen; scheduled time reminders open spot details directly.
+ * screen.
  *
  * Handles:
  * 1. App already running — `addNotificationResponseReceivedListener`
@@ -31,12 +24,9 @@ function isScheduledReminderResponse(data: Record<string, unknown> | undefined):
  */
 export function useNotificationResponseHandler(
   onGeofenceNavigate: (regionId: string) => void,
-  onScheduledReminderNavigate?: (regionId: string) => void,
 ): void {
   const onGeofenceNavigateRef = useRef(onGeofenceNavigate);
   onGeofenceNavigateRef.current = onGeofenceNavigate;
-  const onScheduledReminderNavigateRef = useRef(onScheduledReminderNavigate);
-  onScheduledReminderNavigateRef.current = onScheduledReminderNavigate;
   const handledResponseKeysRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -46,13 +36,9 @@ export function useNotificationResponseHandler(
 
     const Notifications = require('expo-notifications') as typeof import('expo-notifications');
 
-    function deferNavigate(regionId: string, kind: 'geofence' | 'scheduled'): void {
+    function deferNavigate(regionId: string): void {
       InteractionManager.runAfterInteractions(() => {
         requestAnimationFrame(() => {
-          if (kind === 'scheduled') {
-            onScheduledReminderNavigateRef.current?.(regionId);
-            return;
-          }
           onGeofenceNavigateRef.current(regionId);
         });
       });
@@ -60,28 +46,18 @@ export function useNotificationResponseHandler(
 
     function handleResponse(response: NotificationResponse): void {
       const data = response.notification.request.content.data;
-      let regionId: string | null = null;
-      let kind: 'geofence' | 'scheduled' | null = null;
 
-      if (isGeofenceEnterResponse(data)) {
-        regionId = data.regionId;
-        kind = 'geofence';
-      } else if (isScheduledReminderResponse(data)) {
-        regionId = data.regionId;
-        kind = 'scheduled';
-      }
-
-      if (!kind || !regionId) {
+      if (!isGeofenceEnterResponse(data)) {
         return;
       }
 
-      const responseKey = `${kind}:${regionId}`;
+      const responseKey = `geofence:${data.regionId}`;
       if (handledResponseKeysRef.current.has(responseKey)) {
         return;
       }
       handledResponseKeysRef.current.add(responseKey);
 
-      deferNavigate(regionId, kind);
+      deferNavigate(data.regionId);
     }
 
     const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);

@@ -146,7 +146,7 @@ export default function ReminderScheduleFields({
               REMINDER TIME <Text style={styles.optional}>(optional)</Text>
             </Text>
             <Text style={styles.toggleHint}>
-              Get reminded at an exact time, optionally between two times.
+              Only remind when you are at this spot during these hours.
             </Text>
           </View>
           <View style={[styles.toggleChip, timeEnabled && styles.toggleChipActive]}>
@@ -196,7 +196,9 @@ export default function ReminderScheduleFields({
             <Text style={styles.fieldLabel}>
               REMINDER DATE <Text style={styles.optional}>(optional)</Text>
             </Text>
-            <Text style={styles.toggleHint}>Limit the reminder to a specific day.</Text>
+            <Text style={styles.toggleHint}>
+              Only remind when you are at this spot on this day.
+            </Text>
           </View>
           <View style={[styles.toggleChip, dateEnabled && styles.toggleChipActive]}>
             <Text style={[styles.toggleChipLabel, dateEnabled && styles.toggleChipLabelActive]}>
