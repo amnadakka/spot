@@ -11,18 +11,20 @@ import {
 } from 'react-native';
 import MapView, { Circle, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { fill, localeTag } from '../i18n/translations';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import {
   MAX_DESCRIPTION_LENGTH,
   type Reminder,
   type ReminderSchedule,
 } from '../types/reminder';
+import { formatAddressDisplayLines, formatShortLocationSummary } from '../utils/formatAddress';
 import { formatLocalDateTime } from '../utils/formatLocalDateTime';
 import {
-  formatScheduleDateLabel,
-  formatScheduleTimeLabel,
-  hasScheduleTiming,
+  formatSpotDetailReminderSummary,
   normalizeSchedule,
 } from '../utils/reminderSchedule';
 
@@ -41,6 +43,8 @@ type SpotDetailScreenProps = {
 };
 
 const MAP_DELTA = 0.008;
+/** ~18% shorter than the previous 260px hero map. */
+const MAP_HEIGHT = 212;
 
 export default function SpotDetailScreen({
   reminder,
@@ -48,6 +52,9 @@ export default function SpotDetailScreen({
   allowEdit = true,
   onUpdate,
 }: SpotDetailScreenProps) {
+  const { t, language } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
   const mapRef = useRef<MapView>(null);
   const [mapReady, setMapReady] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -62,6 +69,8 @@ export default function SpotDetailScreen({
 
   const savedScheduleKey = [
     reminder.schedule?.date ?? '',
+    reminder.schedule?.repeat ?? '',
+    (reminder.schedule?.weekdays ?? []).join(','),
     reminder.schedule?.timeStart ?? '',
     reminder.schedule?.timeEnd ?? '',
   ].join('|');
@@ -83,6 +92,14 @@ export default function SpotDetailScreen({
   };
 
   const canEdit = Boolean(onUpdate) && allowEdit;
+  const shortLocation = formatShortLocationSummary(reminder.address);
+  const addressLines = formatAddressDisplayLines(reminder.address);
+  const reminderSummary = formatSpotDetailReminderSummary(
+    reminder.enabled,
+    reminder.schedule,
+    language,
+  );
+  const statusLabel = reminder.enabled ? t.statusActive : t.statusPaused;
 
   const handleSave = () => {
     onUpdate?.(reminder.id, {
@@ -113,6 +130,7 @@ export default function SpotDetailScreen({
           pitchEnabled={false}
           showsUserLocation
           showsMyLocationButton={false}
+          accessibilityLabel={fill(t.radiusLabel, { meters: reminder.radiusMeters })}
         >
           {mapReady ? (
             <>
@@ -137,29 +155,43 @@ export default function SpotDetailScreen({
           ) : null}
         </MapView>
 
-        <View style={styles.radiusBadge}>
-          <Ionicons name="resize-outline" size={12} color={colors.primary} />
-          <Text style={styles.radiusText}>{reminder.radiusMeters}m radius</Text>
+        <View style={styles.radiusBadge} accessibilityElementsHidden>
+          <Ionicons name="resize-outline" size={12} color={colors.accent} />
+          <Text style={styles.radiusText}>
+            {fill(t.radiusLabel, { meters: reminder.radiusMeters })}
+          </Text>
         </View>
       </View>
 
       <View style={styles.card}>
         <View style={styles.headerRow}>
-          <View style={styles.statusRow}>
+          <View
+            style={styles.statusRow}
+            accessibilityRole="text"
+            accessibilityLabel={statusLabel}
+          >
             <View
-              style={[styles.statusDot, reminder.enabled ? styles.statusActive : styles.statusInactive]}
+              style={[
+                styles.statusDot,
+                reminder.enabled ? styles.statusActive : styles.statusInactive,
+              ]}
             />
-            <Text style={styles.statusLabel}>{reminder.enabled ? 'Active' : 'Paused'}</Text>
+            <Text style={styles.statusLabel}>{statusLabel}</Text>
           </View>
 
           {canEdit ? (
             editing ? (
               <View style={styles.editActions}>
                 <Pressable
-                  style={({ pressed }) => [styles.editActionBtn, pressed && styles.editActionBtnPressed]}
+                  style={({ pressed }) => [
+                    styles.editActionBtn,
+                    pressed && styles.editActionBtnPressed,
+                  ]}
                   onPress={handleCancelEdit}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.cancel}
                 >
-                  <Text style={styles.editActionCancel}>Cancel</Text>
+                  <Text style={styles.editActionCancel}>{t.cancel}</Text>
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [
@@ -168,23 +200,34 @@ export default function SpotDetailScreen({
                     pressed && styles.editActionBtnPrimaryPressed,
                   ]}
                   onPress={handleSave}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.save}
                 >
-                  <Text style={styles.editActionSave}>Save</Text>
+                  <Text style={styles.editActionSave}>{t.save}</Text>
                 </Pressable>
               </View>
             ) : (
               <Pressable
                 style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
                 onPress={() => setEditing(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t.edit}
               >
-                <Ionicons name="create-outline" size={16} color={colors.primary} />
-                <Text style={styles.editBtnLabel}>Edit</Text>
+                <Ionicons name="create-outline" size={16} color={colors.accent} />
+                <Text style={styles.editBtnLabel}>{t.edit}</Text>
               </Pressable>
             )
           ) : null}
         </View>
 
-        <Text style={styles.title}>{reminder.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          {reminder.title}
+        </Text>
+        {shortLocation ? (
+          <Text style={styles.locationSubtitle} numberOfLines={2}>
+            {shortLocation}
+          </Text>
+        ) : null}
 
         <View style={styles.divider} />
 
@@ -192,25 +235,25 @@ export default function SpotDetailScreen({
           <>
             <View style={styles.field}>
               <View style={styles.descHeader}>
-                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.infoLabel}>{t.descriptionLabel}</Text>
                 <Text style={styles.counter}>
                   {description.length}/{MAX_DESCRIPTION_LENGTH}
                 </Text>
               </View>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Add an optional description…"
+                placeholder={t.descriptionPlaceholderShort}
                 placeholderTextColor={colors.slate300}
                 value={description}
                 onChangeText={(text) => setDescription(text.slice(0, MAX_DESCRIPTION_LENGTH))}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
+                accessibilityLabel={t.descriptionLabel}
               />
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.infoLabel}>Reminder schedule</Text>
               <ReminderScheduleFields
                 key={reminder.id}
                 schedule={schedule}
@@ -222,93 +265,73 @@ export default function SpotDetailScreen({
           <>
             <View style={styles.infoRow}>
               <View style={styles.infoIconWrap}>
-                <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+                <Ionicons name="document-text-outline" size={16} color={colors.accent} />
               </View>
               <View style={styles.infoTextWrap}>
-                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.infoLabel}>{t.descriptionLabel}</Text>
                 <Text style={[styles.infoValue, !reminder.description && styles.infoValueMuted]}>
-                  {reminder.description?.trim() || 'No description'}
+                  {reminder.description?.trim() || t.noDescription}
                 </Text>
               </View>
             </View>
 
-            {hasScheduleTiming(reminder.schedule) ? (
-              <>
-                <View style={styles.infoRow}>
-                  <View style={styles.infoIconWrap}>
-                    <Ionicons name="time-outline" size={16} color={colors.primary} />
-                  </View>
-                  <View style={styles.infoTextWrap}>
-                    <Text style={styles.infoLabel}>Reminder time</Text>
-                    <Text style={styles.infoValue}>
-                      {reminder.schedule?.timeStart && reminder.schedule?.timeEnd
-                        ? `Between ${formatScheduleTimeLabel(reminder.schedule.timeStart)} and ${formatScheduleTimeLabel(reminder.schedule.timeEnd)}`
-                        : reminder.schedule?.timeStart
-                          ? `At ${formatScheduleTimeLabel(reminder.schedule.timeStart)}`
-                          : reminder.schedule?.timeEnd
-                            ? `Until ${formatScheduleTimeLabel(reminder.schedule.timeEnd)}`
-                            : 'Not set'}
-                    </Text>
-                  </View>
-                </View>
-
-                {reminder.schedule?.date ? (
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoIconWrap}>
-                      <Ionicons name="calendar-outline" size={16} color={colors.primary} />
-                    </View>
-                    <View style={styles.infoTextWrap}>
-                      <Text style={styles.infoLabel}>Reminder date</Text>
-                      <Text style={styles.infoValue}>
-                        {formatScheduleDateLabel(reminder.schedule.date)}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-              </>
-            ) : (
-              <View style={styles.infoRow}>
-                <View style={styles.infoIconWrap}>
-                  <Ionicons name="time-outline" size={16} color={colors.primary} />
-                </View>
-                <View style={styles.infoTextWrap}>
-                  <Text style={styles.infoLabel}>Reminder schedule</Text>
-                  <Text style={[styles.infoValue, styles.infoValueMuted]}>Any time</Text>
-                </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconWrap}>
+                <Ionicons
+                  name={reminder.enabled ? 'time-outline' : 'notifications-off-outline'}
+                  size={16}
+                  color={colors.accent}
+                />
               </View>
-            )}
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoLabel}>{reminderSummary.label}</Text>
+                <Text
+                  style={[styles.infoValue, reminderSummary.muted && styles.infoValueMuted]}
+                  accessibilityLabel={`${reminderSummary.label}: ${reminderSummary.value}`}
+                >
+                  {reminderSummary.value}
+                </Text>
+              </View>
+            </View>
           </>
         )}
 
         <View style={styles.infoRow}>
           <View style={styles.infoIconWrap}>
-            <Ionicons name="location" size={16} color={colors.primary} />
+            <Ionicons name="location" size={16} color={colors.accent} />
           </View>
           <View style={styles.infoTextWrap}>
-            <Text style={styles.infoLabel}>Location</Text>
-            <Text style={styles.infoValue}>{reminder.address}</Text>
+            <Text style={styles.infoLabel}>{t.locationLabel}</Text>
+            <Text style={styles.infoValue}>
+              {addressLines.map((line, index) => (
+                <Text key={`${line}-${index}`}>
+                  {index > 0 ? '\n' : ''}
+                  {line}
+                </Text>
+              ))}
+            </Text>
           </View>
         </View>
 
         {triggeredAt ? (
           <View style={styles.infoRow}>
             <View style={styles.infoIconWrap}>
-              <Ionicons name="notifications-outline" size={16} color={colors.primary} />
+              <Ionicons name="notifications-outline" size={16} color={colors.accent} />
             </View>
             <View style={styles.infoTextWrap}>
-              <Text style={styles.infoLabel}>Triggered</Text>
-              <Text style={styles.infoValue}>{formatLocalDateTime(triggeredAt)}</Text>
+              <Text style={styles.infoLabel}>{t.triggeredLabel}</Text>
+              <Text style={styles.infoValue}>{formatLocalDateTime(triggeredAt, language)}</Text>
             </View>
           </View>
         ) : (
-          <View style={styles.infoRow}>
-            <View style={styles.infoIconWrap}>
-              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+          <View style={[styles.infoRow, styles.infoRowSecondary]}>
+            <View style={[styles.infoIconWrap, styles.infoIconWrapSecondary]}>
+              <Ionicons name="calendar-outline" size={16} color={colors.slate400} />
             </View>
             <View style={styles.infoTextWrap}>
-              <Text style={styles.infoLabel}>Created</Text>
-              <Text style={styles.infoValue}>
-                {new Date(reminder.createdAt).toLocaleDateString(undefined, {
+              <Text style={[styles.infoLabel, styles.infoLabelSecondary]}>{t.createdLabel}</Text>
+              <Text style={[styles.infoValue, styles.infoValueSecondary]}>
+                {new Date(reminder.createdAt).toLocaleDateString(localeTag(language), {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -328,15 +351,17 @@ export default function SpotDetailScreen({
               : `geo:${reminder.latitude},${reminder.longitude}?q=${reminder.latitude},${reminder.longitude}(${encodeURIComponent(reminder.title)})`;
           void import('react-native').then(({ Linking }) => Linking.openURL(url));
         }}
+        accessibilityRole="button"
+        accessibilityLabel={t.openInMaps}
       >
-        <Ionicons name="open-outline" size={16} color={colors.primary} />
-        <Text style={styles.openMapsLabel}>Open in Maps</Text>
+        <Ionicons name="open-outline" size={16} color={colors.accent} />
+        <Text style={styles.openMapsLabel}>{t.openInMaps}</Text>
       </Pressable>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   scroll: {
     flex: 1,
   },
@@ -344,7 +369,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   mapContainer: {
-    height: 260,
+    height: MAP_HEIGHT,
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
     borderRadius: radii.xl,
@@ -371,7 +396,7 @@ const styles = StyleSheet.create({
   radiusText: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
   },
   card: {
     marginHorizontal: spacing.lg,
@@ -399,6 +424,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexShrink: 1,
   },
   statusDot: {
     width: 8,
@@ -424,6 +450,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
+    minHeight: 32,
     borderRadius: radii.md,
     backgroundColor: colors.primaryLight,
   },
@@ -433,7 +460,7 @@ const styles = StyleSheet.create({
   editBtnLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
   },
   editActions: {
     flexDirection: 'row',
@@ -443,7 +470,9 @@ const styles = StyleSheet.create({
   editActionBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
+    minHeight: 32,
     borderRadius: radii.md,
+    justifyContent: 'center',
   },
   editActionBtnPressed: {
     opacity: 0.85,
@@ -462,13 +491,20 @@ const styles = StyleSheet.create({
   editActionSave: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.surface,
+    color: colors.onPrimary,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
     color: colors.slate900,
     letterSpacing: -0.3,
+  },
+  locationSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.slate500,
+    marginTop: 4,
+    lineHeight: 20,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -508,6 +544,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.md,
   },
+  infoRowSecondary: {
+    marginBottom: 0,
+    opacity: 0.9,
+  },
   infoIconWrap: {
     width: 32,
     height: 32,
@@ -517,8 +557,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 2,
   },
+  infoIconWrapSecondary: {
+    backgroundColor: colors.slate100,
+  },
   infoTextWrap: {
     flex: 1,
+    minWidth: 0,
   },
   infoLabel: {
     fontSize: 11,
@@ -526,6 +570,9 @@ const styles = StyleSheet.create({
     color: colors.slate400,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  infoLabelSecondary: {
+    color: colors.slate300,
   },
   infoValue: {
     fontSize: 14,
@@ -537,6 +584,9 @@ const styles = StyleSheet.create({
     color: colors.slate400,
     fontStyle: 'italic',
   },
+  infoValueSecondary: {
+    color: colors.slate500,
+  },
   openMapsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -545,6 +595,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,
     paddingVertical: 14,
+    minHeight: 48,
     borderRadius: radii.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderStrong,
@@ -556,6 +607,6 @@ const styles = StyleSheet.create({
   openMapsLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
   },
-});
+}));

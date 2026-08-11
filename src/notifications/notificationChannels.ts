@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
 
+import { getT } from '../i18n/translations';
+
 import { GEOFENCE_ALARM_CHANNEL_ID, SPOT_ALARM_SOUND } from './constants';
 
 export async function ensureGeofenceAndroidChannel(): Promise<void> {
@@ -8,10 +10,11 @@ export async function ensureGeofenceAndroidChannel(): Promise<void> {
   }
 
   const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+  const t = getT();
 
   await Notifications.setNotificationChannelAsync(GEOFENCE_ALARM_CHANNEL_ID, {
-    name: 'Spot alarms',
-    description: 'Ringtone-style reminders when you enter a saved spot area.',
+    name: t.alarmChannelName,
+    description: t.alarmChannelDescription,
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 500, 200, 500, 200, 500],
     sound: SPOT_ALARM_SOUND,

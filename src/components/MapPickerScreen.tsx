@@ -10,9 +10,11 @@ import {
   View,
 } from 'react-native';
 
+import { useI18n } from '../i18n/I18nContext';
 import { getCurrentCoordinates } from '../services/getCurrentCoordinates';
 import { forwardGeocode, reverseGeocode } from '../services/reverseGeocode';
-import { colors } from '../theme/colors';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 
 import CenterPinMapPicker, { type MapCoordinate } from './CenterPinMapPicker';
@@ -32,8 +34,11 @@ type SearchResult = {
 };
 
 export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenProps) {
+  const { t } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
-  const [addressLabel, setAddressLabel] = useState('Loading location…');
+  const [addressLabel, setAddressLabel] = useState(t.loadingLocation);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -152,7 +157,7 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
           <Ionicons name="search" size={16} color={colors.slate400} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search for a location…"
+            placeholder={t.searchLocationPlaceholder}
             placeholderTextColor={colors.slate400}
             value={query}
             onChangeText={handleQueryChange}
@@ -182,7 +187,7 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
                   style={({ pressed }) => [styles.suggestionRow, pressed && styles.suggestionPressed]}
                   onPress={() => void handleSuggestionPress(item)}
                 >
-                  <Ionicons name="location-outline" size={14} color={colors.primary} />
+                  <Ionicons name="location-outline" size={14} color={colors.accent} />
                   <Text style={styles.suggestionText} numberOfLines={1}>
                     {item.label}
                   </Text>
@@ -198,13 +203,13 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
           <CenterPinMapPicker
             coordinate={coordinate}
             onCoordinateChange={handleCoordinateChange}
-            addressLabel={geocoding ? 'Looking up address…' : addressLabel}
+            addressLabel={geocoding ? t.lookingUpAddress : addressLabel}
             onRefreshLocation={() => void handleRefreshLocation()}
             loading={mapLoading}
           />
         ) : (
           <View style={styles.mapPlaceholder}>
-            <ActivityIndicator color={colors.primary} size="large" />
+            <ActivityIndicator color={colors.accent} size="large" />
           </View>
         )}
       </View>
@@ -220,9 +225,9 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
           disabled={!coordinate || confirming}
         >
           {confirming ? (
-            <ActivityIndicator color={colors.surface} />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
-            <Text style={styles.confirmLabel}>Set this location</Text>
+            <Text style={styles.confirmLabel}>{t.setThisLocation}</Text>
           )}
         </Pressable>
       </View>
@@ -230,7 +235,7 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
     flex: 1,
     paddingTop: spacing.md,
@@ -332,8 +337,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   confirmLabel: {
-    color: colors.surface,
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
-});
+}));

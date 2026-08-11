@@ -39,12 +39,17 @@ export async function requestNotificationPermissionsAsync(): Promise<boolean> {
   return requested.granted;
 }
 
-/** Call once when the UI mounts: Android channel + OS notification permission prompt. */
-export async function setupNotificationsForAppLaunch(): Promise<void> {
+/** Ensures the Android notification channel exists (no permission prompt). */
+export async function ensureNotificationsReady(): Promise<void> {
   if (isExpoGoAndroid()) {
     return;
   }
 
   await ensureGeofenceAndroidChannel();
+}
+
+/** Call once when the UI mounts: Android channel + OS notification permission prompt. */
+export async function setupNotificationsForAppLaunch(): Promise<void> {
+  await ensureNotificationsReady();
   await requestNotificationPermissionsAsync();
 }

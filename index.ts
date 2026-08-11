@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler';
+
 import './src/tasks/geofencingTask';
 
 import { registerRootComponent } from 'expo';

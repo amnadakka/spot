@@ -1,30 +1,36 @@
 import { Platform } from 'react-native';
 
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
+import { fill, getT } from '../i18n/translations';
 import { getGeofenceReminderMetadataSync } from '../storage/geofenceReminderTitles';
 
 import { GEOFENCE_ALARM_CHANNEL_ID, SPOT_ALARM_SOUND } from './constants';
 
-function buildAlarmContent(regionIds: string[], batchStartedAt: number): {
+function buildAlarmContent(regionIds: string[], _batchStartedAt: number): {
   title: string;
   body: string;
 } {
+  const t = getT();
+
   if (regionIds.length === 1) {
     const metadata = getGeofenceReminderMetadataSync(regionIds[0]);
     return {
-      title: metadata?.title ?? 'Spot Alarm',
-      body: metadata?.address ?? 'You entered a saved spot area.',
+      title: metadata?.title ?? t.spotAlarm,
+      body: metadata?.address ?? t.enteredSpotArea,
     };
   }
 
   const titles = regionIds
-    .map((id) => getGeofenceReminderMetadataSync(id)?.title ?? 'Spot')
+    .map((id) => getGeofenceReminderMetadataSync(id)?.title ?? t.spotFallback)
     .slice(0, 3);
   const extra = regionIds.length - titles.length;
-  const list = extra > 0 ? `${titles.join(', ')} +${extra} more` : titles.join(', ');
+  const list =
+    extra > 0
+      ? fill(t.nearbySpotsMore, { list: titles.join(', '), extra })
+      : titles.join(', ');
 
   return {
-    title: `${regionIds.length} nearby spots`,
+    title: fill(t.nearbySpotsNotificationTitle, { count: regionIds.length }),
     body: list,
   };
 }

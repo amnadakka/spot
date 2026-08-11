@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus, InteractionManager } from 'react-native'
 
 import type { ActiveGeofenceAlarm } from '../components/GeofenceAlarmRingingLayer';
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
+import { getT } from '../i18n/translations';
 import {
   getGeofenceReminderMetadataSync,
   loadGeofenceReminderMetadata,
@@ -47,8 +48,8 @@ function resolveAlarmFromRegionIds(regionIds: string[], startedAt?: number): Act
 
       return {
         regionId,
-        title: metadata?.title ?? 'Spot Alarm',
-        subtitle: metadata?.address ?? 'You entered a saved spot area.',
+        title: metadata?.title ?? getT().spotAlarm,
+        subtitle: metadata?.address ?? getT().enteredSpotArea,
       };
     }),
   };

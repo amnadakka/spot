@@ -4,7 +4,10 @@ import { InteractionManager, Modal, Pressable, ScrollView, StyleSheet, Text, Vie
 import { useAudioPlayer } from 'expo-audio';
 
 import { configureAlarmAudioMode } from '../audio/configureAlarmAudio';
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { fill } from '../i18n/translations';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 
 export type ActiveGeofenceSpot = {
@@ -29,6 +32,9 @@ export default function GeofenceAlarmRingingLayer({
   onDismiss,
   onViewSpot,
 }: GeofenceAlarmRingingLayerProps) {
+  const { t, isRTL } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
   const player = useAudioPlayer(require('../../assets/alarm.mp3'));
   const spotCount = alarm.spots.length;
   const isGrouped = spotCount > 1;
@@ -76,16 +82,16 @@ export default function GeofenceAlarmRingingLayer({
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.iconWrap}>
-            <Ionicons name="alarm" size={48} color={colors.primary} />
+            <Ionicons name="alarm" size={48} color={colors.accent} />
           </View>
-          <Text style={styles.eyebrow}>Spot alarm</Text>
+          <Text style={styles.eyebrow}>{t.spotAlarmEyebrow}</Text>
           <Text style={styles.title}>
-            {isGrouped ? `You're near ${spotCount} spots` : alarm.spots[0]?.title ?? 'Spot Alarm'}
+            {isGrouped ? fill(t.nearSpotsTitle, { count: spotCount }) : alarm.spots[0]?.title ?? t.spotAlarm}
           </Text>
           <Text style={styles.subtitle}>
             {isGrouped
-              ? 'Tap a spot for details, or dismiss to stop the alarm.'
-              : alarm.spots[0]?.subtitle ?? 'You entered a saved spot area.'}
+              ? t.nearSpotsSubtitle
+              : alarm.spots[0]?.subtitle ?? t.enteredSpotArea}
           </Text>
         </View>
 
@@ -95,12 +101,12 @@ export default function GeofenceAlarmRingingLayer({
               <Pressable
                 key={spot.regionId}
                 accessibilityRole="button"
-                accessibilityLabel={`View ${spot.title}`}
+                accessibilityLabel={fill(t.viewSpotA11y, { title: spot.title })}
                 onPress={() => onViewSpot(spot.regionId)}
                 style={({ pressed }) => [styles.spotRow, pressed && styles.spotRowPressed]}
               >
                 <View style={styles.spotRowIcon}>
-                  <Ionicons name="location" size={18} color={colors.primary} />
+                  <Ionicons name="location" size={18} color={colors.accent} />
                 </View>
                 <View style={styles.spotRowText}>
                   <Text style={styles.spotRowTitle} numberOfLines={1}>
@@ -110,7 +116,11 @@ export default function GeofenceAlarmRingingLayer({
                     {spot.subtitle}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.slate400} />
+                <Ionicons
+                  name={isRTL ? 'chevron-back' : 'chevron-forward'}
+                  size={18}
+                  color={colors.slate400}
+                />
               </Pressable>
             ))}
           </ScrollView>
@@ -120,21 +130,21 @@ export default function GeofenceAlarmRingingLayer({
           {!isGrouped ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="View spot details"
+              accessibilityLabel={t.viewSpotDetailsA11y}
               onPress={() => onViewSpot(alarm.spots[0].regionId)}
               style={({ pressed }) => [styles.viewButton, pressed && styles.buttonPressed]}
             >
-              <Text style={styles.viewLabel}>View spot</Text>
+              <Text style={styles.viewLabel}>{t.viewSpot}</Text>
             </Pressable>
           ) : null}
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Dismiss alarm"
+            accessibilityLabel={t.dismissAlarmA11y}
             onPress={onDismiss}
             style={({ pressed }) => [styles.dismissButton, pressed && styles.buttonPressed]}
           >
-            <Text style={styles.dismissLabel}>Dismiss</Text>
+            <Text style={styles.dismissLabel}>{t.dismiss}</Text>
           </Pressable>
         </View>
       </View>
@@ -142,7 +152,7 @@ export default function GeofenceAlarmRingingLayer({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -167,7 +177,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -238,7 +248,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dismissLabel: {
-    color: colors.surface,
+    color: colors.onPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -259,4 +269,4 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.85,
   },
-});
+}));

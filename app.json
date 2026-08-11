@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -65,8 +65,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#ffffff",
+          "icon": "./assets/notification-icon.png",
+          "color": "#3B82F6",
           "defaultChannel": "default",
           "sounds": [
             "./assets/alarm.mp3"
@@ -80,9 +80,16 @@
         }
       ],
       "./plugins/withGeofenceAlarmFullScreen.js",
+      [
+        "./plugins/withNotificationLargeIcon.js",
+        {
+          "icon": "./assets/notification-large-icon.png"
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "extra": {
+      "supportsRTL": true,
       "eas": {
         "projectId": "81f4989c-9bb5-4c74-ac1f-2baeecd38d09"
       }

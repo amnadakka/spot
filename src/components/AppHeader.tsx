@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 
 type AppHeaderProps = {
@@ -13,15 +15,23 @@ type AppHeaderProps = {
 };
 
 export default function AppHeader({ title, subtitle, count, showBack, onBack }: AppHeaderProps) {
+  const { t, isRTL } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
+
   return (
     <View style={styles.container}>
       {showBack ? (
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
           onPress={onBack}
-          accessibilityLabel="Go back"
+          accessibilityLabel={t.goBack}
         >
-          <Ionicons name="arrow-back" size={18} color={colors.slate600} />
+          <Ionicons
+            name={isRTL ? 'arrow-forward' : 'arrow-back'}
+            size={18}
+            color={colors.slate600}
+          />
         </Pressable>
       ) : null}
 
@@ -41,7 +51,7 @@ export default function AppHeader({ title, subtitle, count, showBack, onBack }: 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -60,7 +70,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.slate100,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -4,
+    marginStart: -4,
   },
   backBtnPressed: {
     backgroundColor: colors.slate200,
@@ -90,9 +100,9 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.accent,
   },
   badgePlaceholder: {
     width: 36,
   },
-});
+}));

@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 
 type EmptyStateProps = {
@@ -9,35 +11,37 @@ type EmptyStateProps = {
 };
 
 export default function EmptyState({ onCreateFirst }: EmptyStateProps) {
+  const { t } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
+
   return (
     <View style={styles.container}>
       <View style={styles.iconCluster}>
         <View style={styles.iconBox}>
-          <Ionicons name="calendar-outline" size={44} color={colors.primary} />
+          <Ionicons name="calendar-outline" size={44} color={colors.accent} />
         </View>
         <View style={styles.plusBadge}>
-          <Ionicons name="add" size={20} color={colors.surface} />
+          <Ionicons name="add" size={20} color={colors.onPrimary} />
         </View>
       </View>
 
       <View style={styles.copy}>
-        <Text style={styles.title}>No upcoming spot alarms</Text>
-        <Text style={styles.subtitle}>
-          Save a location and get notified when you're nearby.
-        </Text>
+        <Text style={styles.title}>{t.emptyTitle}</Text>
+        <Text style={styles.subtitle}>{t.emptySubtitle}</Text>
       </View>
 
       <Pressable
         style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
         onPress={onCreateFirst}
       >
-        <Text style={styles.ctaLabel}>Create your first spot</Text>
+        <Text style={styles.ctaLabel}>{t.emptyCta}</Text>
       </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -110,9 +114,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   ctaLabel: {
-    color: colors.surface,
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-});
+}));

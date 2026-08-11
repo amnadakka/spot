@@ -1,25 +1,60 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { colors } from '../theme/colors';
-import { radii, spacing } from '../theme/spacing';
-import type { ReminderSchedule } from '../types/reminder';
+import { useRef, useState } from 'react';
 import {
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from 'react-native';
+
+import { useI18n } from '../i18n/I18nContext';
+import { fill } from '../i18n/translations';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
+import { radii, spacing } from '../theme/spacing';
+import {
+  REMINDER_RADIUS_OPTIONS,
+  type ReminderRadiusMeters,
+  type ReminderSchedule,
+  type ScheduleDateMode,
+} from '../types/reminder';
+import {
+  clampScheduleTimeRange,
   dateFromScheduleDate,
   formatDateFromDate,
   formatScheduleDateLabel,
   formatScheduleTimeLabel,
   formatTimeFromDate,
+  formatWeekdayLabel,
+  getScheduleDateMode,
   timeStringToDate,
 } from '../utils/reminderSchedule';
 
+import Toggle from './ui/Toggle';
+
 type PickerKind = 'date' | 'timeStart' | 'timeEnd';
+
+const WEEKDAY_OPTIONS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type ReminderScheduleFieldsProps = {
   schedule: ReminderSchedule;
   onChange: (schedule: ReminderSchedule) => void;
+  /** When set, shows a master Reminder switch and dims nested controls when off. */
+  reminderEnabled?: boolean;
+  onReminderEnabledChange?: (enabled: boolean) => void;
+  radiusMeters?: ReminderRadiusMeters;
+  onRadiusChange?: (radius: ReminderRadiusMeters) => void;
 };
 
 function defaultTimeDate(): Date {
@@ -28,22 +63,40 @@ function defaultTimeDate(): Date {
   return date;
 }
 
+function timeWithOffset(value: string, offsetMinutes: number): Date | undefined {
+  const date = timeStringToDate(value);
+  if (!date) {
+    return undefined;
+  }
+
+  date.setMinutes(date.getMinutes() + offsetMinutes);
+  return date;
+}
+
+function animateLayout() {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+}
+
 export default function ReminderScheduleFields({
   schedule,
   onChange,
+  reminderEnabled = true,
+  onReminderEnabledChange,
+  radiusMeters,
+  onRadiusChange,
 }: ReminderScheduleFieldsProps) {
-  const [timeEnabled, setTimeEnabled] = useState(
-    Boolean(schedule.timeStart || schedule.timeEnd),
-  );
-  const [dateEnabled, setDateEnabled] = useState(Boolean(schedule.date));
+  const { t, language } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [activePicker, setActivePicker] = useState<PickerKind | null>(null);
   const [pickerDate, setPickerDate] = useState(defaultTimeDate);
   const activePickerRef = useRef<PickerKind | null>(null);
 
-  useEffect(() => {
-    setTimeEnabled(Boolean(schedule.timeStart || schedule.timeEnd));
-    setDateEnabled(Boolean(schedule.date));
-  }, [schedule.timeStart, schedule.timeEnd, schedule.date]);
+  const showMasterToggle = typeof onReminderEnabledChange === 'function';
+  const controlsActive = reminderEnabled;
+  const dateMode = getScheduleDateMode(schedule);
+  const activeDateMode: ScheduleDateMode =
+    dateMode === 'weekly' ? 'weekly' : dateMode === 'once' ? 'once' : 'daily';
 
   const closePicker = () => {
     activePickerRef.current = null;
@@ -51,6 +104,9 @@ export default function ReminderScheduleFields({
   };
 
   const openPicker = (kind: PickerKind) => {
+    if (!controlsActive) {
+      return;
+    }
     activePickerRef.current = kind;
     if (kind === 'date') {
       setPickerDate(
@@ -66,16 +122,31 @@ export default function ReminderScheduleFields({
 
   const applyPickerValue = (kind: PickerKind, selected: Date) => {
     if (kind === 'date') {
-      onChange({ ...schedule, date: formatDateFromDate(selected) });
+      onChange({
+        ...schedule,
+        date: formatDateFromDate(selected),
+        repeat: undefined,
+        weekdays: undefined,
+      });
       return;
     }
 
     if (kind === 'timeStart') {
-      onChange({ ...schedule, timeStart: formatTimeFromDate(selected) });
+      onChange(
+        clampScheduleTimeRange({
+          ...schedule,
+          timeStart: formatTimeFromDate(selected),
+        }),
+      );
       return;
     }
 
-    onChange({ ...schedule, timeEnd: formatTimeFromDate(selected) });
+    onChange(
+      clampScheduleTimeRange({
+        ...schedule,
+        timeEnd: formatTimeFromDate(selected),
+      }),
+    );
   };
 
   const handlePickerChange = (event: DateTimePickerEvent, selected?: Date) => {
@@ -101,142 +172,353 @@ export default function ReminderScheduleFields({
     applyPickerValue(kind, selected);
   };
 
-  const toggleTimeEnabled = () => {
-    if (timeEnabled) {
-      const next = { ...schedule };
-      delete next.timeStart;
-      delete next.timeEnd;
-      onChange(next);
-      setTimeEnabled(false);
+  const handleReminderToggle = () => {
+    if (!onReminderEnabledChange) {
       return;
     }
-
-    setTimeEnabled(true);
-    onChange({
-      ...schedule,
-      timeStart: schedule.timeStart ?? '09:00',
-    });
+    animateLayout();
+    const next = !reminderEnabled;
+    if (next) {
+      const seeded: ReminderSchedule = { ...schedule };
+      if (getScheduleDateMode(seeded) === 'none') {
+        seeded.repeat = 'daily';
+        delete seeded.date;
+        delete seeded.weekdays;
+      }
+      if (!seeded.timeStart && !seeded.timeEnd) {
+        seeded.timeStart = '09:00';
+      }
+      onChange(clampScheduleTimeRange(seeded));
+    }
+    onReminderEnabledChange(next);
   };
 
-  const toggleDateEnabled = () => {
-    if (dateEnabled) {
-      const next = { ...schedule };
-      delete next.date;
-      onChange(next);
-      setDateEnabled(false);
+  const setDateMode = (mode: ScheduleDateMode) => {
+    if (!controlsActive) {
+      return;
+    }
+    animateLayout();
+    if (mode === 'daily') {
+      onChange({
+        ...schedule,
+        repeat: 'daily',
+        date: undefined,
+        weekdays: undefined,
+      });
       return;
     }
 
-    setDateEnabled(true);
+    if (mode === 'weekly') {
+      onChange({
+        ...schedule,
+        weekdays: schedule.weekdays?.length ? schedule.weekdays : [new Date().getDay()],
+        date: undefined,
+        repeat: undefined,
+      });
+      return;
+    }
+
     onChange({
       ...schedule,
       date: schedule.date ?? formatDateFromDate(new Date()),
+      repeat: undefined,
+      weekdays: undefined,
     });
+  };
+
+  const toggleWeekday = (day: number) => {
+    if (!controlsActive) {
+      return;
+    }
+    const selected = new Set(schedule.weekdays ?? []);
+    if (selected.has(day)) {
+      if (selected.size === 1) {
+        return;
+      }
+      selected.delete(day);
+    } else {
+      selected.add(day);
+    }
+
+    onChange({
+      ...schedule,
+      weekdays: [...selected].sort((left, right) => left - right),
+      date: undefined,
+      repeat: undefined,
+    });
+  };
+
+  const clearTimeEnd = () => {
+    if (!controlsActive || !schedule.timeEnd) {
+      return;
+    }
+    const next = { ...schedule };
+    delete next.timeEnd;
+    onChange(next);
+  };
+
+  const clearTimeStart = () => {
+    if (!controlsActive || !schedule.timeStart) {
+      return;
+    }
+    const next = { ...schedule };
+    delete next.timeStart;
+    onChange(next);
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.section}>
-        <Pressable
-          style={({ pressed }) => [styles.toggleRow, pressed && styles.toggleRowPressed]}
-          onPress={toggleTimeEnabled}
-        >
+      {showMasterToggle ? (
+        <View style={styles.headerRow}>
           <View style={styles.toggleInfo}>
-            <Text style={styles.fieldLabel}>
-              REMINDER TIME <Text style={styles.optional}>(optional)</Text>
-            </Text>
-            <Text style={styles.toggleHint}>
-              Only remind when you are at this spot during these hours.
-            </Text>
+            <Text style={styles.sectionLabel}>{t.reminderSection}</Text>
+            <Text style={styles.toggleHint}>{t.reminderNearHint}</Text>
           </View>
-          <View style={[styles.toggleChip, timeEnabled && styles.toggleChipActive]}>
-            <Text style={[styles.toggleChipLabel, timeEnabled && styles.toggleChipLabelActive]}>
-              {timeEnabled ? 'On' : 'Off'}
-            </Text>
-          </View>
-        </Pressable>
+          <Toggle
+            enabled={reminderEnabled}
+            onToggle={handleReminderToggle}
+            accessibilityLabel={t.reminderSection}
+          />
+        </View>
+      ) : (
+        <Text style={styles.sectionLabel}>{t.reminderSection}</Text>
+      )}
 
-        {timeEnabled ? (
-          <View style={styles.timeRow}>
+      <View
+        style={[styles.controls, !controlsActive && styles.controlsInactive]}
+        pointerEvents={controlsActive ? 'auto' : 'none'}
+        accessibilityElementsHidden={!controlsActive}
+        importantForAccessibility={controlsActive ? 'yes' : 'no-hide-descendants'}
+      >
+        <View style={styles.block}>
+          <Text style={styles.blockLabel}>{t.daysLabel}</Text>
+          <View style={styles.dateModeRow}>
+            {(
+              [
+                { mode: 'once' as const, label: t.oneDay },
+                { mode: 'daily' as const, label: t.everyDay },
+                { mode: 'weekly' as const, label: t.customDays },
+              ] as const
+            ).map(({ mode, label }) => {
+              const selected = activeDateMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected, disabled: !controlsActive }}
+                  accessibilityLabel={label}
+                  style={({ pressed }) => [
+                    styles.dateModeOption,
+                    selected && styles.dateModeOptionSelected,
+                    pressed && controlsActive && styles.pressedSoft,
+                  ]}
+                  onPress={() => setDateMode(mode)}
+                >
+                  <Text
+                    style={[
+                      styles.dateModeOptionLabel,
+                      selected && styles.dateModeOptionLabelSelected,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {activeDateMode === 'once' ? (
             <Pressable
-              style={({ pressed }) => [styles.timeField, pressed && styles.timeFieldPressed]}
-              onPress={() => openPicker('timeStart')}
+              accessibilityRole="button"
+              accessibilityLabel={t.reminderDateLabel}
+              style={({ pressed }) => [styles.dateField, pressed && styles.pressedSoft]}
+              onPress={() => openPicker('date')}
             >
-              <Text style={styles.timeFieldLabel}>From</Text>
-              <View style={styles.timeFieldValueRow}>
-                <Ionicons name="time-outline" size={16} color={colors.primary} />
-                <Text style={styles.timeFieldValue}>
-                  {formatScheduleTimeLabel(schedule.timeStart)}
+              <View style={styles.valueRow}>
+                <Ionicons name="calendar-outline" size={16} color={colors.accent} />
+                <Text style={styles.valueText}>
+                  {formatScheduleDateLabel(schedule.date, language, t.notSet)}
                 </Text>
               </View>
             </Pressable>
+          ) : null}
 
-            <Pressable
-              style={({ pressed }) => [styles.timeField, pressed && styles.timeFieldPressed]}
-              onPress={() => openPicker('timeEnd')}
-            >
-              <Text style={styles.timeFieldLabel}>To</Text>
-              <View style={styles.timeFieldValueRow}>
-                <Ionicons name="time-outline" size={16} color={colors.primary} />
-                <Text style={styles.timeFieldValue}>
-                  {schedule.timeEnd ? formatScheduleTimeLabel(schedule.timeEnd) : 'Optional'}
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.section}>
-        <Pressable
-          style={({ pressed }) => [styles.toggleRow, pressed && styles.toggleRowPressed]}
-          onPress={toggleDateEnabled}
-        >
-          <View style={styles.toggleInfo}>
-            <Text style={styles.fieldLabel}>
-              REMINDER DATE <Text style={styles.optional}>(optional)</Text>
-            </Text>
-            <Text style={styles.toggleHint}>
-              Only remind when you are at this spot on this day.
-            </Text>
-          </View>
-          <View style={[styles.toggleChip, dateEnabled && styles.toggleChipActive]}>
-            <Text style={[styles.toggleChipLabel, dateEnabled && styles.toggleChipLabelActive]}>
-              {dateEnabled ? 'On' : 'Off'}
-            </Text>
-          </View>
-        </Pressable>
-
-        {dateEnabled ? (
-          <Pressable
-            style={({ pressed }) => [styles.dateField, pressed && styles.timeFieldPressed]}
-            onPress={() => openPicker('date')}
-          >
-            <View style={styles.timeFieldValueRow}>
-              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
-              <Text style={styles.timeFieldValue}>
-                {formatScheduleDateLabel(schedule.date)}
-              </Text>
+          {activeDateMode === 'weekly' ? (
+            <View style={styles.weekdayRow}>
+              {WEEKDAY_OPTIONS.map((day) => {
+                const selected = schedule.weekdays?.includes(day) ?? false;
+                const label = formatWeekdayLabel(day, language);
+                return (
+                  <Pressable
+                    key={day}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected, disabled: !controlsActive }}
+                    accessibilityLabel={label}
+                    style={({ pressed }) => [
+                      styles.weekdayChip,
+                      selected && styles.weekdayChipSelected,
+                      pressed && controlsActive && styles.pressedSoft,
+                    ]}
+                    onPress={() => toggleWeekday(day)}
+                  >
+                    <Text
+                      style={[
+                        styles.weekdayChipLabel,
+                        selected && styles.weekdayChipLabelSelected,
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.block}>
+          <Text style={styles.blockLabel}>{t.timeLabel}</Text>
+          <View style={styles.timeRow}>
+            <View style={styles.timeField}>
+              <Text style={styles.timeFieldLabel}>{t.timeFrom}</Text>
+              <View style={styles.valueRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t.timeFrom}, ${
+                    schedule.timeStart
+                      ? formatScheduleTimeLabel(schedule.timeStart, language)
+                      : t.anytime
+                  }`}
+                  style={({ pressed }) => [styles.timeValuePressable, pressed && styles.pressedSoft]}
+                  onPress={() => openPicker('timeStart')}
+                >
+                  <Ionicons name="time-outline" size={16} color={colors.accent} />
+                  <Text style={styles.valueText} numberOfLines={1}>
+                    {schedule.timeStart
+                      ? formatScheduleTimeLabel(schedule.timeStart, language)
+                      : t.anytime}
+                  </Text>
+                </Pressable>
+                {schedule.timeStart ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t.clearTimeA11y}
+                    hitSlop={8}
+                    onPress={clearTimeStart}
+                    style={styles.clearBtn}
+                  >
+                    <Ionicons name="close-circle" size={16} color={colors.slate300} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.timeArrow} accessibilityElementsHidden>
+              <Ionicons name="arrow-forward" size={14} color={colors.slate300} />
+            </View>
+
+            <View style={styles.timeField}>
+              <Text style={styles.timeFieldLabel}>{t.timeTo}</Text>
+              <View style={styles.valueRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t.timeTo}, ${
+                    schedule.timeEnd
+                      ? formatScheduleTimeLabel(schedule.timeEnd, language)
+                      : t.anytime
+                  }`}
+                  style={({ pressed }) => [styles.timeValuePressable, pressed && styles.pressedSoft]}
+                  onPress={() => openPicker('timeEnd')}
+                >
+                  <Ionicons name="time-outline" size={16} color={colors.accent} />
+                  <Text style={styles.valueText} numberOfLines={1}>
+                    {schedule.timeEnd
+                      ? formatScheduleTimeLabel(schedule.timeEnd, language)
+                      : t.anytime}
+                  </Text>
+                </Pressable>
+                {schedule.timeEnd ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t.clearTimeA11y}
+                    hitSlop={8}
+                    onPress={clearTimeEnd}
+                    style={styles.clearBtn}
+                  >
+                    <Ionicons name="close-circle" size={16} color={colors.slate300} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {radiusMeters != null && onRadiusChange ? (
+          <View style={styles.block}>
+            <Text style={styles.blockLabel}>{t.reminderDistance}</Text>
+            <View style={styles.rangeRow}>
+              {REMINDER_RADIUS_OPTIONS.map((option) => {
+                const selected = radiusMeters === option;
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected, disabled: !controlsActive }}
+                    accessibilityLabel={fill(t.metersUnit, { meters: option })}
+                    style={({ pressed }) => [
+                      styles.rangeOption,
+                      selected && styles.rangeOptionSelected,
+                      pressed && controlsActive && styles.pressedSoft,
+                    ]}
+                    onPress={() => onRadiusChange(option)}
+                  >
+                    <Text
+                      style={[styles.rangeOptionLabel, selected && styles.rangeOptionLabelSelected]}
+                    >
+                      {fill(t.metersUnit, { meters: option })}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.rangeHint}>
+              {fill(t.remindWithinShort, { meters: radiusMeters })}
+            </Text>
+          </View>
         ) : null}
       </View>
 
-      {activePicker ? (
+      {activePicker && controlsActive ? (
         <View style={styles.pickerWrap}>
           <DateTimePicker
             value={pickerDate}
             mode={activePicker === 'date' ? 'date' : 'time'}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            minimumDate={activePicker === 'date' ? new Date() : undefined}
+            minimumDate={
+              activePicker === 'date'
+                ? new Date()
+                : activePicker === 'timeEnd' && schedule.timeStart
+                  ? timeWithOffset(schedule.timeStart, 1)
+                  : undefined
+            }
+            maximumDate={
+              activePicker === 'timeStart' && schedule.timeEnd
+                ? timeWithOffset(schedule.timeEnd, -1)
+                : undefined
+            }
             onChange={handlePickerChange}
           />
           {Platform.OS === 'ios' ? (
             <Pressable
-              style={({ pressed }) => [styles.pickerDoneBtn, pressed && styles.timeFieldPressed]}
+              style={({ pressed }) => [styles.pickerDoneBtn, pressed && styles.pressedSoft]}
               onPress={closePicker}
+              accessibilityRole="button"
+              accessibilityLabel={t.done}
             >
-              <Text style={styles.pickerDoneLabel}>Done</Text>
+              <Text style={styles.pickerDoneLabel}>{t.done}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -245,66 +527,124 @@ export default function ReminderScheduleFields({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
-    gap: spacing.lg,
+    gap: spacing.md,
   },
-  section: {
-    gap: spacing.sm,
-  },
-  toggleRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
     paddingHorizontal: 4,
   },
-  toggleRowPressed: {
-    opacity: 0.85,
-  },
   toggleInfo: {
     flex: 1,
     gap: 2,
+    minWidth: 0,
   },
-  fieldLabel: {
+  sectionLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: colors.slate500,
     letterSpacing: 0.5,
-  },
-  optional: {
-    textTransform: 'none',
-    fontWeight: '400',
-    color: colors.slate300,
+    paddingHorizontal: 4,
   },
   toggleHint: {
     fontSize: 12,
     color: colors.slate400,
     lineHeight: 16,
   },
-  toggleChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.lg,
-    backgroundColor: colors.slate100,
+  controls: {
+    gap: spacing.md,
+  },
+  controlsInactive: {
+    opacity: 0.4,
+  },
+  block: {
+    gap: spacing.sm,
+  },
+  blockLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.slate500,
+    letterSpacing: 0.5,
+    paddingHorizontal: 4,
+  },
+  dateModeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  dateModeOption: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radii.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  toggleChipActive: {
-    backgroundColor: colors.primaryLight,
+  dateModeOptionSelected: {
     borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
-  toggleChipLabel: {
+  dateModeOptionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.slate500,
+    textAlign: 'center',
+  },
+  dateModeOptionLabelSelected: {
+    color: colors.accent,
+  },
+  dateField: {
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  weekdayChip: {
+    flex: 1,
+    minHeight: 44,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 10,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  weekdayChipLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.slate500,
   },
-  toggleChipLabelActive: {
-    color: colors.primary,
+  weekdayChipLabelSelected: {
+    color: colors.accent,
   },
   timeRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  timeArrow: {
+    paddingHorizontal: 2,
   },
   timeField: {
     flex: 1,
@@ -315,17 +655,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     gap: 4,
+    minHeight: 64,
   },
-  dateField: {
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    borderRadius: radii.xl,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-  },
-  timeFieldPressed: {
-    backgroundColor: colors.slate50,
+  timeValuePressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
   },
   timeFieldLabel: {
     fontSize: 11,
@@ -334,15 +671,56 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  timeFieldValueRow: {
+  valueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    minWidth: 0,
   },
-  timeFieldValue: {
+  valueText: {
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: '600',
     color: colors.slate800,
+  },
+  clearBtn: {
+    marginLeft: 'auto',
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  rangeOption: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 12,
+    borderRadius: radii.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rangeOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  rangeOptionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.slate500,
+  },
+  rangeOptionLabelSelected: {
+    color: colors.accent,
+  },
+  rangeHint: {
+    fontSize: 12,
+    color: colors.slate400,
+    paddingHorizontal: 4,
+    lineHeight: 16,
+  },
+  pressedSoft: {
+    opacity: 0.85,
   },
   pickerWrap: {
     gap: spacing.sm,
@@ -357,6 +735,6 @@ const styles = StyleSheet.create({
   pickerDoneLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
   },
-});
+}));

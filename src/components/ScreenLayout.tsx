@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors } from '../theme/colors';
+import { makeStyles } from '../theme/makeStyles';
 
 type ScreenLayoutProps = {
   children: ReactNode;
@@ -21,6 +21,7 @@ export default function ScreenLayout({
   style,
 }: ScreenLayoutProps) {
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
 
   return (
     <View style={styles.backdrop}>
@@ -56,7 +57,7 @@ export function BottomInsetSpacer({ minPadding = 0 }: BottomInsetSpacerProps) {
   return <View style={{ height }} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   backdrop: {
     flex: 1,
     backgroundColor: colors.background,
@@ -68,4 +69,4 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-});
+}));

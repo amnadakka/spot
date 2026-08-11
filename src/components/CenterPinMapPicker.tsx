@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Circle, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import { DEFAULT_REMINDER_RADIUS_METERS } from '../types/reminder';
 
@@ -47,6 +49,9 @@ export default function CenterPinMapPicker({
   onRefreshLocation,
   loading = false,
 }: CenterPinMapPickerProps) {
+  const { t } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
   const mapRef = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
   const [circleCenter, setCircleCenter] = useState<MapCoordinate | null>(coordinate);
@@ -149,7 +154,7 @@ export default function CenterPinMapPicker({
       </MapView>
 
       <View style={styles.pinOverlay} pointerEvents="none">
-        <Ionicons name="location" size={40} color={colors.primary} style={styles.pinIcon} />
+        <Ionicons name="location" size={40} color={colors.accent} style={styles.pinIcon} />
       </View>
 
       <Pressable
@@ -157,7 +162,7 @@ export default function CenterPinMapPicker({
         onPress={onRefreshLocation}
         disabled={loading}
       >
-        <Ionicons name="refresh" size={18} color={colors.primary} />
+        <Ionicons name="refresh" size={18} color={colors.accent} />
       </Pressable>
 
       <View style={styles.zoomControls}>
@@ -170,9 +175,9 @@ export default function CenterPinMapPicker({
           ]}
           onPress={() => handleZoom(ZOOM_IN_FACTOR)}
           disabled={loading}
-          accessibilityLabel="Zoom in"
+          accessibilityLabel={t.zoomInA11y}
         >
-          <Ionicons name="add" size={20} color={colors.primary} />
+          <Ionicons name="add" size={20} color={colors.accent} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -183,20 +188,20 @@ export default function CenterPinMapPicker({
           ]}
           onPress={() => handleZoom(ZOOM_OUT_FACTOR)}
           disabled={loading}
-          accessibilityLabel="Zoom out"
+          accessibilityLabel={t.zoomOutA11y}
         >
-          <Ionicons name="remove" size={20} color={colors.primary} />
+          <Ionicons name="remove" size={20} color={colors.accent} />
         </Pressable>
       </View>
 
       <View style={styles.radiusBadge} pointerEvents="none">
-        <Ionicons name="resize-outline" size={12} color={colors.primary} />
+        <Ionicons name="resize-outline" size={12} color={colors.accent} />
         <Text style={styles.radiusText}>{DEFAULT_REMINDER_RADIUS_METERS}m radius</Text>
       </View>
 
       <View style={styles.addressPill} pointerEvents="none">
         <View style={styles.addressInner}>
-          {loading ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+          {loading ? <ActivityIndicator size="small" color={colors.accent} /> : null}
           <Text style={styles.addressText} numberOfLines={1}>
             {addressLabel}
           </Text>
@@ -205,14 +210,14 @@ export default function CenterPinMapPicker({
 
       {loading ? (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator color={colors.primary} size="large" />
+          <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrapper: {
     flex: 1,
     borderRadius: radii.xl,
@@ -306,7 +311,7 @@ const styles = StyleSheet.create({
   radiusText: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
   },
   addressPill: {
     position: 'absolute',
@@ -338,4 +343,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

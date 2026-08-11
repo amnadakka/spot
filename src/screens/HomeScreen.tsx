@@ -1,45 +1,39 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react';
+import { ActivityIndicator, Alert, AppState, BackHandler, DeviceEventEmitter, Platform, StyleSheet, View } from 'react-native';
 
 import AddSpotForm from '../components/AddSpotForm';
 import AppHeader from '../components/AppHeader';
 import BottomNav, { type Tab } from '../components/BottomNav';
+import CalendarScreen from '../components/CalendarScreen';
 import ScreenLayout from '../components/ScreenLayout';
-import EmptyState from '../components/EmptyState';
 import HistoryScreen from '../components/HistoryScreen';
 import HomeLiveMap from '../components/HomeLiveMap';
+import HomeSpotsSheet from '../components/HomeSpotsSheet';
 import LocationBanner from '../components/LocationBanner';
 import MapPickerScreen, { type PickedLocation } from '../components/MapPickerScreen';
+import SettingsScreen from '../components/settings/SettingsScreen';
 import SpotDetailScreen from '../components/SpotDetailScreen';
-import SpotList from '../components/SpotList';
+import TextScreen from '../components/TextScreen';
+import { useI18n } from '../i18n/I18nContext';
 import { useLiveUserLocation } from '../hooks/useLiveUserLocation';
 import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
+import { useScheduledOccupiedSpotAlarms } from '../hooks/useScheduledOccupiedSpotAlarms';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { cancelLegacyScheduledNotifications } from '../services/cancelLegacyScheduledNotifications';
+import { REMINDERS_CHANGED_EVENT } from '../storage/consumeDateUnlinkedReminders';
 import { loadReminders, saveReminders } from '../storage/reminders';
 import { deleteHistoryEvent, deleteHistoryEvents, reminderFromHistoryEvent } from '../storage/history';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 import type { Reminder, ReminderRadiusMeters, ReminderSchedule } from '../types/reminder';
 import type { HistoryEvent } from '../types/history';
-import {
-  MAX_ACTIVE_SPOTS,
-  MAX_ACTIVE_SPOTS_MESSAGE,
-} from '../types/reminder';
+import { MAX_ACTIVE_SPOTS } from '../types/reminder';
 import {
   activeSpotOverlapWarningMessage,
   findOverlappingActiveReminder,
 } from '../utils/activeReminderProximity';
 
-type Screen = 'home' | 'history' | 'map' | 'form' | 'detail';
-
-const screenTitles: Record<Screen, string> = {
-  home: 'Spots',
-  history: 'History',
-  map: 'New Spot',
-  form: 'New Spot',
-  detail: 'Spot Details',
-};
+type Screen = 'home' | 'calendar' | 'history' | 'text' | 'settings' | 'map' | 'form' | 'detail';
 
 function makeReminderId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -55,6 +49,18 @@ type PendingSpotNavigation = {
 };
 
 const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref) {
+  const { t } = useI18n();
+  const screenTitles: Record<Screen, string> = {
+    home: t.spotsTitle,
+    calendar: t.calendarTitle,
+    history: t.historyTitle,
+    text: t.textTitle,
+    settings: t.settingsTitle,
+    map: t.newSpotTitle,
+    form: t.newSpotTitle,
+    detail: t.spotDetailsTitle,
+  };
+  const { colors } = useTheme();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const pendingNavigationRef = useRef<PendingSpotNavigation | null>(null);
@@ -64,12 +70,14 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [detailTriggeredAt, setDetailTriggeredAt] = useState<string | null>(null);
-  const [detailOrigin, setDetailOrigin] = useState<'home' | 'history'>('home');
+  const [detailOrigin, setDetailOrigin] = useState<'home' | 'calendar' | 'history'>('home');
+  const [homeBodyHeight, setHomeBodyHeight] = useState(0);
 
-  const locationStatus = useUserLocation();
+  const locationStatus = useUserLocation(true);
   const liveUserLocation = useLiveUserLocation();
   const occupiedSpotIds = useOccupiedSpotIds(reminders, liveUserLocation);
   useReminderGeofencingSync(reminders);
+  useScheduledOccupiedSpotAlarms(reminders, liveUserLocation);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +97,27 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, []);
 
   useEffect(() => {
+    function reloadRemindersFromDisk() {
+      void loadReminders().then(setReminders);
+    }
+
+    const remindersSub = DeviceEventEmitter.addListener(
+      REMINDERS_CHANGED_EVENT,
+      reloadRemindersFromDisk,
+    );
+    const appSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        reloadRemindersFromDisk();
+      }
+    });
+
+    return () => {
+      remindersSub.remove();
+      appSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (loading) {
       return;
     }
@@ -96,8 +125,13 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   }, [loading, reminders]);
 
   const openSpotDetail = useCallback(
-    (reminder: Reminder, options?: { triggeredAt?: string | null; origin?: 'home' | 'history' }) => {
-      const origin = options?.origin ?? (activeTab === 'history' ? 'history' : 'home');
+    (
+      reminder: Reminder,
+      options?: { triggeredAt?: string | null; origin?: 'home' | 'calendar' | 'history' },
+    ) => {
+      const origin =
+        options?.origin ??
+        (activeTab === 'history' ? 'history' : activeTab === 'calendar' ? 'calendar' : 'home');
       setDetailOrigin(origin);
       setDetailTriggeredAt(options?.triggeredAt ?? null);
       setSelectedReminder(reminder);
@@ -150,10 +184,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       const reminder = reminderFromHistoryEvent(event, live);
 
       if (!reminder) {
-        Alert.alert(
-          'Spot unavailable',
-          'This history entry does not have enough location data to show details.',
-        );
+        Alert.alert(t.spotUnavailableTitle, t.spotUnavailableBody);
         return;
       }
 
@@ -162,7 +193,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       setSelectedReminder(reminder);
       setScreen('detail');
     },
-    [reminders],
+    [reminders, t],
   );
 
   const handleDeleteHistoryEvent = useCallback((eventId: string) => {
@@ -213,7 +244,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       if (!target.enabled) {
         const activeCount = prev.filter((reminder) => reminder.enabled).length;
         if (activeCount >= MAX_ACTIVE_SPOTS) {
-          Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+          Alert.alert(t.spotLimitTitle, t.spotLimitMessage);
           return prev;
         }
       }
@@ -222,11 +253,31 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         reminder.id === id ? { ...reminder, enabled: !reminder.enabled } : reminder,
       );
     });
-  }, []);
+  }, [t]);
 
-  const handleDelete = useCallback((id: string) => {
-    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
-  }, []);
+  const handleSetEnabledMany = useCallback(
+    (ids: string[], enabled: boolean) => {
+      setReminders((prev) => {
+        const idSet = new Set(ids);
+
+        if (enabled) {
+          const activeCount = prev.filter((reminder) => reminder.enabled).length;
+          const toEnable = prev.filter(
+            (reminder) => idSet.has(reminder.id) && !reminder.enabled,
+          ).length;
+          if (activeCount + toEnable > MAX_ACTIVE_SPOTS) {
+            Alert.alert(t.spotLimitTitle, t.spotLimitMessage);
+            return prev;
+          }
+        }
+
+        return prev.map((reminder) =>
+          idSet.has(reminder.id) ? { ...reminder, enabled } : reminder,
+        );
+      });
+    },
+    [t],
+  );
 
   const handleDeleteMany = useCallback((ids: string[]) => {
     const idSet = new Set(ids);
@@ -267,11 +318,11 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const handleAdd = useCallback(() => {
     const activeCount = reminders.filter((reminder) => reminder.enabled).length;
     if (activeCount >= MAX_ACTIVE_SPOTS) {
-      Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
+      Alert.alert(t.spotLimitTitle, t.spotLimitMessage);
       return;
     }
     setScreen('map');
-  }, [reminders]);
+  }, [reminders, t]);
 
   const handleLocationPicked = useCallback((location: PickedLocation) => {
     setPickedLocation(location);
@@ -283,7 +334,8 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       title: string,
       description: string,
       radiusMeters: ReminderRadiusMeters,
-      schedule?: ReminderSchedule,
+      schedule: ReminderSchedule | undefined,
+      enabled: boolean,
     ) => {
       if (!pickedLocation) {
         return;
@@ -297,7 +349,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         latitude: pickedLocation.latitude,
         longitude: pickedLocation.longitude,
         radiusMeters,
-        enabled: true,
+        enabled,
         createdAt: new Date().toISOString(),
         schedule,
       };
@@ -315,33 +367,40 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
       title: string,
       description: string,
       radiusMeters: ReminderRadiusMeters,
-      schedule?: ReminderSchedule,
+      schedule: ReminderSchedule | undefined,
+      enabled: boolean,
     ) => {
       if (!pickedLocation) {
         return;
       }
 
-      const activeCount = reminders.filter((reminder) => reminder.enabled).length;
-      if (activeCount >= MAX_ACTIVE_SPOTS) {
-        Alert.alert('Spot limit reached', MAX_ACTIVE_SPOTS_MESSAGE);
-        return;
+      if (enabled) {
+        const activeCount = reminders.filter((reminder) => reminder.enabled).length;
+        if (activeCount >= MAX_ACTIVE_SPOTS) {
+          Alert.alert(t.spotLimitTitle, t.spotLimitMessage);
+          return;
+        }
+
+        const conflict = findOverlappingActiveReminder(reminders, pickedLocation, { radiusMeters });
+        if (conflict) {
+          Alert.alert(
+            t.overlappingRangeTitle,
+            activeSpotOverlapWarningMessage(conflict, t.overlappingRangeBody),
+            [
+              { text: t.goBackAction, style: 'cancel' },
+              {
+                text: t.saveAnyway,
+                onPress: () => saveNewReminder(title, description, radiusMeters, schedule, enabled),
+              },
+            ],
+          );
+          return;
+        }
       }
 
-      const conflict = findOverlappingActiveReminder(reminders, pickedLocation, { radiusMeters });
-      if (conflict) {
-        Alert.alert('Overlapping range', activeSpotOverlapWarningMessage(conflict), [
-          { text: 'Go back', style: 'cancel' },
-          {
-            text: 'Save anyway',
-            onPress: () => saveNewReminder(title, description, radiusMeters, schedule),
-          },
-        ]);
-        return;
-      }
-
-      saveNewReminder(title, description, radiusMeters, schedule);
+      saveNewReminder(title, description, radiusMeters, schedule, enabled);
     },
-    [pickedLocation, reminders, saveNewReminder],
+    [pickedLocation, reminders, saveNewReminder, t],
   );
 
   const handleDiscard = useCallback(() => {
@@ -368,42 +427,63 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
     setActiveTab('home');
   }, [screen, detailOrigin]);
 
-  const showNav = screen === 'home' || screen === 'history';
+  const showNav =
+    screen === 'home' ||
+    screen === 'calendar' ||
+    screen === 'history' ||
+    screen === 'text' ||
+    screen === 'settings';
   const showBack = screen === 'map' || screen === 'form' || screen === 'detail';
+
+  // Android system back (button or edge swipe) mirrors the header back button.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !showBack) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [showBack, handleBack]);
   const activeCount = reminders.filter((reminder) => reminder.enabled).length;
   const atSpotLimit = activeCount >= MAX_ACTIVE_SPOTS;
 
-  const headerSubtitle =
-    screen === 'home'
-      ? reminders.length > 0
-        ? `${activeCount} of ${reminders.length} active`
-        : `Up to ${MAX_ACTIVE_SPOTS} active spots`
-      : undefined;
+  // Fixed to the default sheet snap (48%) so the map does not reframe when the sheet moves.
+  const mapPadding = useMemo(() => {
+    const bottomPad = homeBodyHeight > 0 ? Math.round(homeBodyHeight * 0.48) : 200;
+    return { top: 12, right: 12, bottom: bottomPad, left: 12 };
+  }, [homeBodyHeight]);
+
+  const headerTitle = screen === 'settings' ? t.settingsTitle : screenTitles[screen];
+  const isHome = screen === 'home';
 
   if (loading) {
     return (
       <ScreenLayout style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </ScreenLayout>
     );
   }
 
   return (
     <ScreenLayout bottomInsetHandledExternally={showNav}>
-      <AppHeader
-        title={screenTitles[screen]}
-        subtitle={headerSubtitle}
-        count={screen === 'home' && reminders.length > 0 ? reminders.length : undefined}
-        showBack={showBack}
-        onBack={handleBack}
-      />
+      {!isHome ? (
+        <AppHeader title={headerTitle} showBack={showBack} onBack={handleBack} />
+      ) : null}
 
-      {screen === 'home' || screen === 'history' ? <LocationBanner status={locationStatus} /> : null}
+      {screen === 'history' ? <LocationBanner status={locationStatus} /> : null}
 
       <View style={styles.content}>
-        {screen === 'home' ? (
-          <View style={styles.homeBody}>
+        {isHome ? (
+          <View
+            style={styles.homeBody}
+            onLayout={(e) => setHomeBodyHeight(e.nativeEvent.layout.height)}
+          >
             <HomeLiveMap
+              style={StyleSheet.absoluteFillObject}
               reminders={reminders}
               occupiedSpotIds={occupiedSpotIds}
               userLocation={
@@ -412,24 +492,27 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
                   ? { latitude: locationStatus.latitude, longitude: locationStatus.longitude }
                   : null)
               }
+              mapPadding={mapPadding}
+              onSpotPress={navigateToSpotDetail}
             />
-            <View style={styles.listArea}>
-              {reminders.length === 0 ? (
-                <EmptyState onCreateFirst={handleAdd} />
-              ) : (
-                <SpotList
-                  reminders={reminders}
-                  onToggle={handleToggle}
-                  onDelete={handleDelete}
-                  onDeleteMany={handleDeleteMany}
-                  onAdd={handleAdd}
-                  onSpotPress={navigateToSpotDetail}
-                  addDisabled={atSpotLimit}
-                  occupiedSpotIds={occupiedSpotIds}
-                />
-              )}
+            <View style={styles.homeBanner} pointerEvents="box-none">
+              <LocationBanner status={locationStatus} />
             </View>
+            <HomeSpotsSheet
+              reminders={reminders}
+              occupiedSpotIds={occupiedSpotIds}
+              atSpotLimit={atSpotLimit}
+              onToggle={handleToggle}
+              onSetEnabledMany={handleSetEnabledMany}
+              onDeleteMany={handleDeleteMany}
+              onAdd={handleAdd}
+              onSpotPress={navigateToSpotDetail}
+            />
           </View>
+        ) : null}
+
+        {screen === 'calendar' ? (
+          <CalendarScreen reminders={reminders} onSpotPress={navigateToSpotDetail} />
         ) : null}
 
         {screen === 'history' && (
@@ -441,6 +524,10 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
           />
         )}
 
+        {screen === 'text' ? <TextScreen reminders={reminders} /> : null}
+
+        {screen === 'settings' ? <SettingsScreen /> : null}
+
         {screen === 'map' && <MapPickerScreen onLocationPicked={handleLocationPicked} />}
 
         {screen === 'form' && pickedLocation ? (
@@ -448,6 +535,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
             location={pickedLocation}
             onConfirm={handleConfirm}
             onDiscard={handleDiscard}
+            onEditLocation={() => setScreen('map')}
           />
         ) : null}
 
@@ -482,8 +570,11 @@ const styles = StyleSheet.create({
   homeBody: {
     flex: 1,
   },
-  listArea: {
-    flex: 1,
-    overflow: 'hidden',
+  homeBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 3,
   },
 });

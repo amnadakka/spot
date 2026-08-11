@@ -17,6 +17,7 @@ export type GeofenceReminderMetadata = {
 
 let metadataCache: Record<string, GeofenceReminderMetadata> = {};
 let hydrated = false;
+let hydratePromise: Promise<void> | null = null;
 
 async function hydrateMetadataCache(): Promise<void> {
   if (hydrated || Platform.OS === 'web') {
@@ -38,7 +39,20 @@ async function hydrateMetadataCache(): Promise<void> {
   }
 }
 
-void hydrateMetadataCache();
+/** Ensures persisted metadata is loaded before the geofencing task reads schedules. */
+export function ensureGeofenceReminderMetadataHydrated(): Promise<void> {
+  if (hydrated) {
+    return Promise.resolve();
+  }
+
+  if (!hydratePromise) {
+    hydratePromise = hydrateMetadataCache();
+  }
+
+  return hydratePromise;
+}
+
+void ensureGeofenceReminderMetadataHydrated();
 
 /** Sync lookup for the background geofence task — no disk I/O on the hot path. */
 export function getGeofenceReminderMetadataSync(
@@ -68,6 +82,8 @@ export async function persistGeofenceReminderTitles(reminders: Reminder[]): Prom
   );
 
   metadataCache = metadata;
+  hydrated = true;
+  hydratePromise = null;
 
   await AsyncStorage.multiSet([
     [TITLES_KEY, JSON.stringify(titles)],

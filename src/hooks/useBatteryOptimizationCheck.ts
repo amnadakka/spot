@@ -5,6 +5,8 @@ import { Alert, AppState, type AppStateStatus, Platform } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { useI18n } from '../i18n/I18nContext';
+
 const DISMISSED_KEY = '@spot_battery_opt_dismissed_v1';
 const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000; // Re-ask after 7 days.
 
@@ -21,11 +23,14 @@ const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000; // Re-ask after 7 days.
  * The prompt is shown once per session. If the user dismisses it, it won't
  * appear again for 7 days (persisted in AsyncStorage).
  */
-export function useBatteryOptimizationCheck(): void {
+export function useBatteryOptimizationCheck(enabled = true): void {
+  const { t } = useI18n();
   const prompted = useRef(false);
+  const tRef = useRef(t);
+  tRef.current = t;
 
   useEffect(() => {
-    if (Platform.OS !== 'android') {
+    if (Platform.OS !== 'android' || !enabled) {
       return;
     }
 
@@ -49,7 +54,21 @@ export function useBatteryOptimizationCheck(): void {
         }
 
         prompted.current = true;
-        showOptimizationAlert();
+        const strings = tRef.current;
+        Alert.alert(strings.batteryOptTitle, strings.batteryOptBody, [
+          {
+            text: strings.notNow,
+            style: 'cancel',
+            onPress: () => {
+              void AsyncStorage.setItem(DISMISSED_KEY, String(Date.now()));
+            },
+          },
+          {
+            text: strings.openSettings,
+            style: 'default',
+            onPress: openBatteryOptimizationSettings,
+          },
+        ], { cancelable: true });
       } catch {
         // Battery API unavailable — skip silently.
       }
@@ -68,29 +87,7 @@ export function useBatteryOptimizationCheck(): void {
 
     const subscription = AppState.addEventListener('change', handleAppState);
     return () => subscription.remove();
-  }, []);
-}
-
-function showOptimizationAlert() {
-  Alert.alert(
-    'Improve Pocket Reminders',
-    'For instant notifications when your screen is off, set Spot to "Unrestricted" in your battery settings.\n\nThis prevents Android from delaying alerts while the phone is in your pocket.',
-    [
-      {
-        text: 'Not Now',
-        style: 'cancel',
-        onPress: () => {
-          void AsyncStorage.setItem(DISMISSED_KEY, String(Date.now()));
-        },
-      },
-      {
-        text: 'Open Settings',
-        style: 'default',
-        onPress: openBatteryOptimizationSettings,
-      },
-    ],
-    { cancelable: true },
-  );
+  }, [enabled]);
 }
 
 function openBatteryOptimizationSettings() {

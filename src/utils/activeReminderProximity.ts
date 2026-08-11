@@ -25,6 +25,14 @@ export function findOverlappingActiveReminder(
   });
 }
 
-export function activeSpotOverlapWarningMessage(conflict: Reminder): string {
-  return `This overlaps with "${conflict.title}" (${conflict.radiusMeters} m range). When you're nearby, reminders in the same area are grouped into one alarm.`;
+export function activeSpotOverlapWarningMessage(
+  conflict: Reminder,
+  template?: string,
+): string {
+  const body =
+    template ??
+    'This overlaps with "{title}" ({meters} m range). When you\'re nearby, reminders in the same area are grouped into one alarm.';
+  return body
+    .replace('{title}', conflict.title)
+    .replace('{meters}', String(conflict.radiusMeters));
 }

@@ -1,18 +1,22 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { colors } from '../../theme/colors';
+import { makeStyles } from '../../theme/makeStyles';
 
 type ToggleProps = {
   enabled: boolean;
   onToggle: () => void;
+  accessibilityLabel?: string;
 };
 
-export default function Toggle({ enabled, onToggle }: ToggleProps) {
+export default function Toggle({ enabled, onToggle, accessibilityLabel }: ToggleProps) {
+  const styles = useStyles();
+
   return (
     <Pressable
       onPress={onToggle}
       accessibilityRole="switch"
       accessibilityState={{ checked: enabled }}
+      accessibilityLabel={accessibilityLabel}
       style={[styles.track, enabled ? styles.trackOn : styles.trackOff]}
     >
       <View style={[styles.thumb, enabled ? styles.thumbOn : styles.thumbOff]} />
@@ -20,7 +24,7 @@ export default function Toggle({ enabled, onToggle }: ToggleProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   track: {
     width: 48,
     height: 28,
@@ -29,7 +33,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   trackOn: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
   trackOff: {
     backgroundColor: colors.slate200,
@@ -51,4 +55,4 @@ const styles = StyleSheet.create({
   thumbOff: {
     alignSelf: 'flex-start',
   },
-});
+}));

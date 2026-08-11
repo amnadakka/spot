@@ -1,20 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
-import { colors } from '../theme/colors';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import type { Reminder } from '../types/reminder';
 import type { Coordinate } from '../utils/geo';
 
 const MAP_DELTA = 0.012;
 
+type MapPadding = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
 type HomeLiveMapProps = {
   reminders: Reminder[];
   occupiedSpotIds: Set<string>;
   userLocation: Coordinate | null;
+  style?: StyleProp<ViewStyle>;
+  mapPadding?: MapPadding;
+  onSpotPress?: (reminderId: string) => void;
 };
 
-export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }: HomeLiveMapProps) {
+export default function HomeLiveMap({
+  reminders,
+  occupiedSpotIds,
+  userLocation,
+  style,
+  mapPadding,
+  onSpotPress,
+}: HomeLiveMapProps) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const mapRef = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
 
@@ -36,8 +56,8 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
 
   if (!userLocation) {
     return (
-      <View style={[styles.container, styles.loading]}>
-        <ActivityIndicator size="small" color={colors.primary} />
+      <View style={[styles.container, styles.loading, style]}>
+        <ActivityIndicator size="small" color={colors.accent} />
       </View>
     );
   }
@@ -50,7 +70,7 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -63,6 +83,7 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
         pitchEnabled={false}
         scrollEnabled
         zoomEnabled
+        mapPadding={mapPadding}
       >
         {activeReminders.map((reminder) => (
           <Marker
@@ -74,6 +95,7 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
             title={reminder.title}
             description={reminder.description?.trim() || undefined}
             pinColor={occupiedSpotIds.has(reminder.id) ? colors.destructive : colors.primaryDark}
+            onPress={() => onSpotPress?.(reminder.id)}
           />
         ))}
       </MapView>
@@ -81,11 +103,9 @@ export default function HomeLiveMap({ reminders, occupiedSpotIds, userLocation }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
-    height: '30%',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    flex: 1,
     backgroundColor: colors.slate100,
   },
   loading: {
@@ -93,6 +113,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   map: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
-});
+}));

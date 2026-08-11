@@ -11,12 +11,13 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import {
   DEFAULT_REMINDER_RADIUS_METERS,
   MAX_DESCRIPTION_LENGTH,
-  REMINDER_RADIUS_OPTIONS,
   type ReminderRadiusMeters,
   type ReminderSchedule,
 } from '../types/reminder';
@@ -31,18 +32,33 @@ type AddSpotFormProps = {
     title: string,
     description: string,
     radiusMeters: ReminderRadiusMeters,
-    schedule?: ReminderSchedule,
+    schedule: ReminderSchedule | undefined,
+    enabled: boolean,
   ) => void;
   onDiscard: () => void;
+  onEditLocation?: () => void;
 };
 
-export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotFormProps) {
+export default function AddSpotForm({
+  location,
+  onConfirm,
+  onDiscard,
+  onEditLocation,
+}: AddSpotFormProps) {
+  const { t } = useI18n();
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionFocused, setDescriptionFocused] = useState(false);
+  const [reminderEnabled, setReminderEnabled] = useState(true);
   const [radiusMeters, setRadiusMeters] = useState<ReminderRadiusMeters>(
     DEFAULT_REMINDER_RADIUS_METERS,
   );
-  const [schedule, setSchedule] = useState<ReminderSchedule>({});
+  const [schedule, setSchedule] = useState<ReminderSchedule>({
+    repeat: 'daily',
+    timeStart: '09:00',
+  });
 
   const isValid = title.trim().length > 0;
 
@@ -59,86 +75,87 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
       >
         <View style={styles.locationCard}>
           <View style={styles.locationIcon}>
-            <Ionicons name="location" size={16} color={colors.primary} />
+            <Ionicons name="location" size={16} color={colors.accent} />
           </View>
           <View style={styles.locationInfo}>
-            <Text style={styles.locationLabel}>SELECTED LOCATION</Text>
-            <Text style={styles.locationValue} numberOfLines={2}>
-              {location.address}
-            </Text>
+            <View style={styles.locationHeader}>
+              <Text style={styles.locationLabel}>{t.selectedLocation}</Text>
+              {onEditLocation ? (
+                <Pressable
+                  onPress={onEditLocation}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.edit}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.editLocationBtn, pressed && styles.pressedSoft]}
+                >
+                  <Text style={styles.editLocationLabel}>{t.edit}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={styles.locationValue}>{location.address}</Text>
           </View>
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>TITLE</Text>
+          <Text style={styles.fieldLabel}>{t.fieldTitle}</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Secret Lookout"
+            placeholder={t.titlePlaceholder}
             placeholderTextColor={colors.slate300}
             value={title}
             onChangeText={setTitle}
             maxLength={50}
             autoFocus
+            accessibilityLabel={t.fieldTitle}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>REMINDER RANGE</Text>
-          <View style={styles.rangeRow}>
-            {REMINDER_RADIUS_OPTIONS.map((option) => {
-              const selected = radiusMeters === option;
-              return (
-                <Pressable
-                  key={option}
-                  style={({ pressed }) => [
-                    styles.rangeOption,
-                    selected && styles.rangeOptionSelected,
-                    pressed && styles.rangeOptionPressed,
-                  ]}
-                  onPress={() => setRadiusMeters(option)}
-                >
-                  <Text style={[styles.rangeOptionLabel, selected && styles.rangeOptionLabelSelected]}>
-                    {option} m
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.rangeHint}>
-            You'll be reminded when you're within {radiusMeters} meters of this spot.
-          </Text>
-        </View>
-
-        <ReminderScheduleFields schedule={schedule} onChange={setSchedule} />
-
-        <View style={styles.field}>
           <View style={styles.descHeader}>
             <Text style={styles.fieldLabel}>
-              DESCRIPTION <Text style={styles.optional}>(optional)</Text>
+              {t.fieldDescription} <Text style={styles.optional}>{t.optional}</Text>
             </Text>
             <Text style={styles.counter}>
               {description.length}/{MAX_DESCRIPTION_LENGTH}
             </Text>
           </View>
           <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Add an optional description (e.g., best at sunset)…"
+            style={[
+              styles.input,
+              styles.textArea,
+              descriptionFocused && styles.textAreaFocused,
+            ]}
+            placeholder={t.descriptionPlaceholder}
             placeholderTextColor={colors.slate300}
             value={description}
             onChangeText={(text) => setDescription(text.slice(0, MAX_DESCRIPTION_LENGTH))}
             multiline
-            numberOfLines={3}
+            numberOfLines={descriptionFocused ? 3 : 1}
             textAlignVertical="top"
+            onFocus={() => setDescriptionFocused(true)}
+            onBlur={() => setDescriptionFocused(false)}
+            accessibilityLabel={t.fieldDescription}
           />
         </View>
+
+        <ReminderScheduleFields
+          schedule={schedule}
+          onChange={setSchedule}
+          reminderEnabled={reminderEnabled}
+          onReminderEnabledChange={setReminderEnabled}
+          radiusMeters={radiusMeters}
+          onRadiusChange={setRadiusMeters}
+        />
       </ScrollView>
 
       <View style={styles.actions}>
         <Pressable
           style={({ pressed }) => [styles.discardBtn, pressed && styles.discardBtnPressed]}
           onPress={onDiscard}
+          accessibilityRole="button"
+          accessibilityLabel={t.discard}
         >
-          <Text style={styles.discardLabel}>Discard</Text>
+          <Text style={styles.discardLabel}>{t.discard}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -148,12 +165,21 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
           ]}
           onPress={() =>
             isValid &&
-            onConfirm(title.trim(), description.trim(), radiusMeters, normalizeSchedule(schedule))
+            onConfirm(
+              title.trim(),
+              description.trim(),
+              radiusMeters,
+              normalizeSchedule(schedule),
+              reminderEnabled,
+            )
           }
           disabled={!isValid}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !isValid }}
+          accessibilityLabel={t.confirm}
         >
           <Text style={[styles.confirmLabel, !isValid && styles.confirmLabelDisabled]}>
-            Confirm
+            {t.confirm}
           </Text>
         </Pressable>
       </View>
@@ -161,7 +187,7 @@ export default function AddSpotForm({ location, onConfirm, onDiscard }: AddSpotF
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -173,7 +199,7 @@ const styles = StyleSheet.create({
   },
   locationCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
     backgroundColor: colors.primaryLight,
     borderRadius: radii.xl,
@@ -187,16 +213,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   locationInfo: {
     flex: 1,
     minWidth: 0,
   },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   locationLabel: {
+    flexShrink: 1,
     fontSize: 11,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
     letterSpacing: 0.5,
+  },
+  editLocationBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  editLocationLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accent,
+    opacity: 0.85,
   },
   locationValue: {
     fontSize: 14,
@@ -206,40 +250,6 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: 6,
-  },
-  rangeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  rangeOption: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radii.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
-  rangeOptionSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  rangeOptionPressed: {
-    opacity: 0.85,
-  },
-  rangeOptionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.slate500,
-  },
-  rangeOptionLabelSelected: {
-    color: colors.primary,
-  },
-  rangeHint: {
-    fontSize: 12,
-    color: colors.slate400,
-    paddingHorizontal: 4,
-    lineHeight: 16,
   },
   descHeader: {
     flexDirection: 'row',
@@ -274,8 +284,16 @@ const styles = StyleSheet.create({
     color: colors.slate800,
   },
   textArea: {
-    minHeight: 96,
+    minHeight: 48,
+    maxHeight: 48,
     paddingTop: 14,
+  },
+  textAreaFocused: {
+    minHeight: 88,
+    maxHeight: 120,
+  },
+  pressedSoft: {
+    opacity: 0.75,
   },
   actions: {
     flexDirection: 'row',
@@ -287,11 +305,13 @@ const styles = StyleSheet.create({
   },
   discardBtn: {
     flex: 1,
+    minHeight: 48,
     paddingVertical: spacing.lg,
     borderRadius: radii.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderStrong,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
   },
   discardBtnPressed: {
@@ -304,9 +324,11 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     flex: 1,
+    minHeight: 48,
     paddingVertical: spacing.lg,
     borderRadius: radii.xl,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   confirmBtnActive: {
     backgroundColor: colors.primary,
@@ -325,9 +347,9 @@ const styles = StyleSheet.create({
   confirmLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.surface,
+    color: colors.onPrimary,
   },
   confirmLabelDisabled: {
     color: colors.slate300,
   },
-});
+}));

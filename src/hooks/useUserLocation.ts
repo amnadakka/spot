@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import { Accuracy } from 'expo-location';
 import { useEffect, useState } from 'react';
 
+import { getT } from '../i18n/translations';
 import { requestForegroundThenBackgroundPermissions } from '../services/locationPermissions';
 
 export type UserLocationStatus =
@@ -11,10 +12,15 @@ export type UserLocationStatus =
   | { kind: 'position_error'; message: string }
   | { kind: 'ok'; latitude: number; longitude: number; backgroundGranted: boolean };
 
-export function useUserLocation(): UserLocationStatus {
+export function useUserLocation(enabled = true): UserLocationStatus {
   const [status, setStatus] = useState<UserLocationStatus>({ kind: 'loading' });
 
   useEffect(() => {
+    if (!enabled) {
+      setStatus({ kind: 'loading' });
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
@@ -30,12 +36,37 @@ export function useUserLocation(): UserLocationStatus {
         return;
       }
 
-      const permissions = await requestForegroundThenBackgroundPermissions();
+      const existing = await Location.getForegroundPermissionsAsync();
       if (cancelled) {
         return;
       }
 
-      if (!permissions.foregroundGranted) {
+      let foregroundGranted = existing.granted;
+      let backgroundGranted = false;
+
+      if (existing.granted) {
+        const background = await Location.getBackgroundPermissionsAsync();
+        if (cancelled) {
+          return;
+        }
+        backgroundGranted = background.granted;
+        if (!background.granted && background.canAskAgain !== false) {
+          const requestedBackground = await Location.requestBackgroundPermissionsAsync();
+          if (cancelled) {
+            return;
+          }
+          backgroundGranted = requestedBackground.granted;
+        }
+      } else if (existing.canAskAgain !== false) {
+        const permissions = await requestForegroundThenBackgroundPermissions();
+        if (cancelled) {
+          return;
+        }
+        foregroundGranted = permissions.foregroundGranted;
+        backgroundGranted = permissions.backgroundGranted;
+      }
+
+      if (!foregroundGranted) {
         setStatus({ kind: 'foreground_denied' });
         return;
       }
@@ -52,14 +83,14 @@ export function useUserLocation(): UserLocationStatus {
           kind: 'ok',
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          backgroundGranted: permissions.backgroundGranted,
+          backgroundGranted,
         });
       } catch (e) {
         if (cancelled) {
           return;
         }
 
-        const message = e instanceof Error ? e.message : 'Could not read current location.';
+        const message = e instanceof Error ? e.message : getT().couldNotReadLocation;
         setStatus({ kind: 'position_error', message });
       }
     }
@@ -69,7 +100,7 @@ export function useUserLocation(): UserLocationStatus {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return status;
 }

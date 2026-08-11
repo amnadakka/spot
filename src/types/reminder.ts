@@ -1,6 +1,12 @@
+export type ScheduleDateMode = 'once' | 'daily' | 'weekly';
+
 export type ReminderSchedule = {
-  /** Local calendar date in YYYY-MM-DD format. */
+  /** One-time local calendar date in YYYY-MM-DD format. */
   date?: string;
+  /** Repeat every day (mutually exclusive with `date` and `weekdays`). */
+  repeat?: 'daily';
+  /** Local weekdays when active — 0 = Sunday … 6 = Saturday (mutually exclusive with `date` and `repeat`). */
+  weekdays?: number[];
   /** Local time in HH:mm — start of the active window when geofence alarms may fire. */
   timeStart?: string;
   /** Local time in HH:mm — end of the active window (optional). */
@@ -22,7 +28,7 @@ export type Reminder = {
   schedule?: ReminderSchedule;
 };
 
-export const REMINDER_RADIUS_OPTIONS = [50, 100, 150, 200] as const;
+export const REMINDER_RADIUS_OPTIONS = [100, 150, 200] as const;
 
 export type ReminderRadiusMeters = (typeof REMINDER_RADIUS_OPTIONS)[number];
 
@@ -32,6 +38,3 @@ export const MAX_DESCRIPTION_LENGTH = 100;
 
 /** Cap on simultaneously enabled geofence regions to protect background battery. */
 export const MAX_ACTIVE_SPOTS = 5;
-
-export const MAX_ACTIVE_SPOTS_MESSAGE =
-  'Maximum of 5 active spots allowed to optimize background battery performance.';

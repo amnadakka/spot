@@ -1,7 +1,8 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 
 import type { UserLocationStatus } from '../hooks/useUserLocation';
-import { colors } from '../theme/colors';
+import { useI18n } from '../i18n/I18nContext';
+import { makeStyles } from '../theme/makeStyles';
 import { radii, spacing } from '../theme/spacing';
 
 type LocationBannerProps = {
@@ -9,6 +10,9 @@ type LocationBannerProps = {
 };
 
 export default function LocationBanner({ status }: LocationBannerProps) {
+  const { t } = useI18n();
+  const styles = useStyles();
+
   if (status.kind === 'loading' || status.kind === 'ok') {
     if (status.kind === 'ok' && status.backgroundGranted) {
       return null;
@@ -17,10 +21,7 @@ export default function LocationBanner({ status }: LocationBannerProps) {
     if (status.kind === 'ok' && !status.backgroundGranted) {
       return (
         <View style={[styles.banner, styles.warningBanner]}>
-          <Text style={styles.warningText}>
-            Background location wasn't granted. Nearby reminders may not work when the app isn't
-            open.
-          </Text>
+          <Text style={styles.warningText}>{t.backgroundLocationWarning}</Text>
           <SettingsLink />
         </View>
       );
@@ -31,10 +32,9 @@ export default function LocationBanner({ status }: LocationBannerProps) {
 
   let message = '';
   if (status.kind === 'services_disabled') {
-    message = 'Location services are turned off on this device.';
+    message = t.locationServicesOff;
   } else if (status.kind === 'foreground_denied') {
-    message =
-      'Location permission was denied. Allow location access to save spots and get nearby alerts.';
+    message = t.locationPermissionDenied;
   } else if (status.kind === 'position_error') {
     message = status.message;
   }
@@ -48,14 +48,17 @@ export default function LocationBanner({ status }: LocationBannerProps) {
 }
 
 function SettingsLink() {
+  const { t } = useI18n();
+  const styles = useStyles();
+
   return (
     <Pressable onPress={() => Linking.openSettings()} style={styles.linkWrap}>
-      <Text style={styles.link}>Open settings</Text>
+      <Text style={styles.link}>{t.openSettingsShort}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   banner: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.sm,
@@ -78,6 +81,6 @@ const styles = StyleSheet.create({
   link: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.accent,
   },
-});
+}));
