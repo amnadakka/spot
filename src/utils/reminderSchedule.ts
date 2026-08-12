@@ -145,6 +145,10 @@ export function getScheduleDateMode(schedule?: ReminderSchedule): ScheduleDateMo
     return 'once';
   }
 
+  if (schedule.repeat === 'once') {
+    return 'oneshot';
+  }
+
   return 'none';
 }
 
@@ -154,6 +158,7 @@ export function hasScheduleTiming(schedule?: ReminderSchedule): boolean {
       schedule?.timeEnd ||
       schedule?.date ||
       schedule?.repeat === 'daily' ||
+      schedule?.repeat === 'once' ||
       (schedule?.weekdays && schedule.weekdays.length > 0),
   );
 }
@@ -173,7 +178,7 @@ function normalizeScheduleWeekdays(weekdays?: number[]): number[] | undefined {
 function normalizeScheduleDateFields(schedule: ReminderSchedule): ReminderSchedule {
   const next: ReminderSchedule = { ...schedule };
 
-  if (next.repeat === 'daily') {
+  if (next.repeat === 'daily' || next.repeat === 'once') {
     delete next.date;
     delete next.weekdays;
     return next;
@@ -201,8 +206,8 @@ export function normalizeSchedule(schedule?: ReminderSchedule): ReminderSchedule
   if (schedule.date) {
     normalized.date = schedule.date;
   }
-  if (schedule.repeat === 'daily') {
-    normalized.repeat = 'daily';
+  if (schedule.repeat === 'daily' || schedule.repeat === 'once') {
+    normalized.repeat = schedule.repeat;
   }
   const weekdays = normalizeScheduleWeekdays(schedule.weekdays);
   if (weekdays) {
@@ -232,7 +237,7 @@ export function isScheduleActiveOnDate(schedule: ReminderSchedule | undefined, d
     return true;
   }
 
-  if (schedule.repeat === 'daily') {
+  if (schedule.repeat === 'daily' || schedule.repeat === 'once') {
     return true;
   }
 
@@ -356,6 +361,10 @@ export function formatScheduleDateRepeatLabel(
     return everyDayLabel;
   }
 
+  if (schedule.repeat === 'once') {
+    return getT(language).daysOnce;
+  }
+
   if (schedule.weekdays && schedule.weekdays.length > 0) {
     return formatScheduleWeekdaysLabel(schedule.weekdays, language);
   }
@@ -404,6 +413,8 @@ export function formatScheduleSummary(
   if (dateLabel) {
     if (schedule.repeat === 'daily') {
       parts.push(t.everyDayLower);
+    } else if (schedule.repeat === 'once') {
+      parts.push(t.daysOnce);
     } else {
       parts.push(fill(t.onDate, { date: dateLabel }));
     }
@@ -429,8 +440,12 @@ function formatDetailDatePart(
   const t = getT(language);
   const mode = getScheduleDateMode(schedule);
 
-  if (mode === 'daily' || mode === 'none') {
+  if (mode === 'daily') {
     return t.everyDay;
+  }
+
+  if (mode === 'oneshot' || mode === 'none') {
+    return t.daysOnce;
   }
 
   if (mode === 'weekly' && schedule?.weekdays?.length) {

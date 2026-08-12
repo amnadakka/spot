@@ -129,14 +129,10 @@ export type AppTranslations = {
   // History
   historyEmptyTitle: string;
   historyEmptySubtitle: string;
-  historySearchPlaceholder: string;
-  historyNoMatchTitle: string;
-  historyNoMatchSubtitle: string;
   deleteHistoryTitle: string;
   deleteHistoryConfirmOne: string;
   deleteHistoryConfirmMany: string;
   selectEntriesToDelete: string;
-  clearSearchA11y: string;
   deleteHistoryEntryA11y: string;
   spotUnavailableTitle: string;
   spotUnavailableBody: string;
@@ -170,6 +166,7 @@ export type AppTranslations = {
   timeTo: string;
   oneDay: string;
   everyDay: string;
+  daysOnce: string;
   weekdays: string;
   customDays: string;
   weekdaysMonFri: string;
@@ -367,14 +364,10 @@ export const en: AppTranslations = {
 
   historyEmptyTitle: 'No history yet',
   historyEmptySubtitle: 'Triggered spots will appear here.',
-  historySearchPlaceholder: 'Search by title or description…',
-  historyNoMatchTitle: 'No matching history',
-  historyNoMatchSubtitle: 'Try a different title or description.',
   deleteHistoryTitle: 'Delete history',
   deleteHistoryConfirmOne: 'Delete this history entry? This cannot be undone.',
   deleteHistoryConfirmMany: 'Delete {count} history entries? This cannot be undone.',
   selectEntriesToDelete: 'Select entries to delete',
-  clearSearchA11y: 'Clear search',
   deleteHistoryEntryA11y: 'Delete history entry',
   spotUnavailableTitle: 'Spot unavailable',
   spotUnavailableBody:
@@ -407,6 +400,7 @@ export const en: AppTranslations = {
   timeTo: 'To',
   oneDay: 'One day',
   everyDay: 'Every day',
+  daysOnce: 'Once',
   weekdays: 'Weekdays',
   customDays: 'Custom',
   weekdaysMonFri: '{start}–{end}',
@@ -606,16 +600,12 @@ export const de: AppTranslations = {
 
   historyEmptyTitle: 'Noch kein Verlauf',
   historyEmptySubtitle: 'Ausgelöste Spots erscheinen hier.',
-  historySearchPlaceholder: 'Nach Titel oder Beschreibung suchen…',
-  historyNoMatchTitle: 'Kein passender Verlauf',
-  historyNoMatchSubtitle: 'Probiere einen anderen Titel oder eine andere Beschreibung.',
   deleteHistoryTitle: 'Verlauf löschen',
   deleteHistoryConfirmOne:
     'Diesen Verlaufseintrag löschen? Das kann nicht rückgängig gemacht werden.',
   deleteHistoryConfirmMany:
     '{count} Verlaufseinträge löschen? Das kann nicht rückgängig gemacht werden.',
   selectEntriesToDelete: 'Einträge zum Löschen auswählen',
-  clearSearchA11y: 'Suche löschen',
   deleteHistoryEntryA11y: 'Verlaufseintrag löschen',
   spotUnavailableTitle: 'Spot nicht verfügbar',
   spotUnavailableBody:
@@ -648,6 +638,7 @@ export const de: AppTranslations = {
   timeTo: 'Bis',
   oneDay: 'Ein Tag',
   everyDay: 'Jeden Tag',
+  daysOnce: 'Einmal',
   weekdays: 'Wochentage',
   customDays: 'Benutzerdefiniert',
   weekdaysMonFri: '{start}–{end}',
@@ -844,14 +835,10 @@ export const ar: AppTranslations = {
 
   historyEmptyTitle: 'لا يوجد سجل بعد',
   historyEmptySubtitle: 'ستظهر الأماكن المُفعَّلة هنا.',
-  historySearchPlaceholder: 'ابحث بالعنوان أو الوصف…',
-  historyNoMatchTitle: 'لا يوجد سجل مطابق',
-  historyNoMatchSubtitle: 'جرّب عنواناً أو وصفاً مختلفاً.',
   deleteHistoryTitle: 'حذف السجل',
   deleteHistoryConfirmOne: 'حذف إدخال السجل هذا؟ لا يمكن التراجع عن ذلك.',
   deleteHistoryConfirmMany: 'حذف {count} إدخالات سجل؟ لا يمكن التراجع عن ذلك.',
   selectEntriesToDelete: 'حدد الإدخالات للحذف',
-  clearSearchA11y: 'مسح البحث',
   deleteHistoryEntryA11y: 'حذف إدخال السجل',
   spotUnavailableTitle: 'المكان غير متاح',
   spotUnavailableBody: 'لا يحتوي إدخال السجل هذا على بيانات موقع كافية لعرض التفاصيل.',
@@ -883,6 +870,7 @@ export const ar: AppTranslations = {
   timeTo: 'إلى',
   oneDay: 'يوم واحد',
   everyDay: 'كل يوم',
+  daysOnce: 'مرة',
   weekdays: 'أيام الأسبوع',
   customDays: 'مخصص',
   weekdaysMonFri: '{start}–{end}',

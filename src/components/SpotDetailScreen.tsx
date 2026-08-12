@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -40,6 +41,7 @@ type SpotDetailScreenProps = {
     reminderId: string,
     updates: { description?: string; schedule?: ReminderSchedule },
   ) => void;
+  onDelete?: (reminderId: string) => void;
 };
 
 const MAP_DELTA = 0.008;
@@ -51,6 +53,7 @@ export default function SpotDetailScreen({
   triggeredAt,
   allowEdit = true,
   onUpdate,
+  onDelete,
 }: SpotDetailScreenProps) {
   const { t, language } = useI18n();
   const { colors } = useTheme();
@@ -92,6 +95,7 @@ export default function SpotDetailScreen({
   };
 
   const canEdit = Boolean(onUpdate) && allowEdit;
+  const canDelete = Boolean(onDelete) && allowEdit;
   const shortLocation = formatShortLocationSummary(reminder.address);
   const addressLines = formatAddressDisplayLines(reminder.address);
   const reminderSummary = formatSpotDetailReminderSummary(
@@ -113,6 +117,20 @@ export default function SpotDetailScreen({
     setDescription(reminder.description ?? '');
     setSchedule(reminder.schedule ?? {});
     setEditing(false);
+  };
+
+  const handleDelete = () => {
+    if (!onDelete) {
+      return;
+    }
+    Alert.alert(t.deleteSpotsTitle, t.deleteSpotConfirmOne, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete,
+        style: 'destructive',
+        onPress: () => onDelete(reminder.id),
+      },
+    ]);
   };
 
   return (
@@ -179,44 +197,57 @@ export default function SpotDetailScreen({
             <Text style={styles.statusLabel}>{statusLabel}</Text>
           </View>
 
-          {canEdit ? (
-            editing ? (
-              <View style={styles.editActions}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.editActionBtn,
-                    pressed && styles.editActionBtnPressed,
-                  ]}
-                  onPress={handleCancelEdit}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.cancel}
-                >
-                  <Text style={styles.editActionCancel}>{t.cancel}</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.editActionBtn,
-                    styles.editActionBtnPrimary,
-                    pressed && styles.editActionBtnPrimaryPressed,
-                  ]}
-                  onPress={handleSave}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.save}
-                >
-                  <Text style={styles.editActionSave}>{t.save}</Text>
-                </Pressable>
-              </View>
-            ) : (
+          {editing && canEdit ? (
+            <View style={styles.editActions}>
               <Pressable
-                style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
-                onPress={() => setEditing(true)}
+                style={({ pressed }) => [
+                  styles.editActionBtn,
+                  pressed && styles.editActionBtnPressed,
+                ]}
+                onPress={handleCancelEdit}
                 accessibilityRole="button"
-                accessibilityLabel={t.edit}
+                accessibilityLabel={t.cancel}
               >
-                <Ionicons name="create-outline" size={16} color={colors.accent} />
-                <Text style={styles.editBtnLabel}>{t.edit}</Text>
+                <Text style={styles.editActionCancel}>{t.cancel}</Text>
               </Pressable>
-            )
+              <Pressable
+                style={({ pressed }) => [
+                  styles.editActionBtn,
+                  styles.editActionBtnPrimary,
+                  pressed && styles.editActionBtnPrimaryPressed,
+                ]}
+                onPress={handleSave}
+                accessibilityRole="button"
+                accessibilityLabel={t.save}
+              >
+                <Text style={styles.editActionSave}>{t.save}</Text>
+              </Pressable>
+            </View>
+          ) : canEdit || canDelete ? (
+            <View style={styles.headerActions}>
+              {canDelete ? (
+                <Pressable
+                  style={({ pressed }) => [styles.deleteBtn, pressed && styles.deleteBtnPressed]}
+                  onPress={handleDelete}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.delete}
+                >
+                  <Ionicons name="trash-outline" size={16} color={colors.destructive} />
+                  <Text style={styles.deleteBtnLabel}>{t.delete}</Text>
+                </Pressable>
+              ) : null}
+              {canEdit ? (
+                <Pressable
+                  style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
+                  onPress={() => setEditing(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.edit}
+                >
+                  <Ionicons name="create-outline" size={16} color={colors.accent} />
+                  <Text style={styles.editBtnLabel}>{t.edit}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
 
@@ -461,6 +492,29 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 12,
     fontWeight: '600',
     color: colors.accent,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    minHeight: 32,
+    borderRadius: radii.md,
+    backgroundColor: colors.slate100,
+  },
+  deleteBtnPressed: {
+    opacity: 0.85,
+  },
+  deleteBtnLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.destructive,
   },
   editActions: {
     flexDirection: 'row',

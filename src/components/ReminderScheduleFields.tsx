@@ -96,7 +96,13 @@ export default function ReminderScheduleFields({
   const controlsActive = reminderEnabled;
   const dateMode = getScheduleDateMode(schedule);
   const activeDateMode: ScheduleDateMode =
-    dateMode === 'weekly' ? 'weekly' : dateMode === 'once' ? 'once' : 'daily';
+    dateMode === 'weekly'
+      ? 'weekly'
+      : dateMode === 'once'
+        ? 'once'
+        : dateMode === 'oneshot'
+          ? 'oneshot'
+          : 'daily';
 
   const closePicker = () => {
     activePickerRef.current = null;
@@ -218,6 +224,16 @@ export default function ReminderScheduleFields({
       return;
     }
 
+    if (mode === 'oneshot') {
+      onChange({
+        ...schedule,
+        repeat: 'once',
+        date: undefined,
+        weekdays: undefined,
+      });
+      return;
+    }
+
     onChange({
       ...schedule,
       date: schedule.date ?? formatDateFromDate(new Date()),
@@ -292,14 +308,15 @@ export default function ReminderScheduleFields({
       >
         <View style={styles.block}>
           <Text style={styles.blockLabel}>{t.daysLabel}</Text>
-          <View style={styles.dateModeRow}>
-            {(
-              [
-                { mode: 'once' as const, label: t.oneDay },
-                { mode: 'daily' as const, label: t.everyDay },
-                { mode: 'weekly' as const, label: t.customDays },
-              ] as const
-            ).map(({ mode, label }) => {
+            <View style={styles.dateModeRow}>
+              {(
+                [
+                  { mode: 'oneshot' as const, label: t.daysOnce },
+                  { mode: 'once' as const, label: t.oneDay },
+                  { mode: 'daily' as const, label: t.everyDay },
+                  { mode: 'weekly' as const, label: t.customDays },
+                ] as const
+              ).map(({ mode, label }) => {
               const selected = activeDateMode === mode;
               return (
                 <Pressable
@@ -573,10 +590,13 @@ const useStyles = makeStyles((colors) => ({
   },
   dateModeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   dateModeOption: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: 72,
     minHeight: 44,
     paddingVertical: 10,
     paddingHorizontal: spacing.xs,
@@ -592,7 +612,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.primaryLight,
   },
   dateModeOptionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: colors.slate500,
     textAlign: 'center',

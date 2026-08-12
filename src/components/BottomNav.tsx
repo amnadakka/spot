@@ -22,10 +22,10 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
       <NavItem
-        label={t.tabHome}
-        icon="home"
-        active={activeTab === 'home'}
-        onPress={() => onTabChange('home')}
+        label={t.tabText}
+        icon="chatbubble-ellipses-outline"
+        active={activeTab === 'text'}
+        onPress={() => onTabChange('text')}
       />
       <NavItem
         label={t.tabCalendar}
@@ -34,16 +34,16 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         onPress={() => onTabChange('calendar')}
       />
       <NavItem
+        label={t.tabHome}
+        icon="home"
+        active={activeTab === 'home'}
+        onPress={() => onTabChange('home')}
+      />
+      <NavItem
         label={t.tabHistory}
         icon="time-outline"
         active={activeTab === 'history'}
         onPress={() => onTabChange('history')}
-      />
-      <NavItem
-        label={t.tabText}
-        icon="chatbubble-ellipses-outline"
-        active={activeTab === 'text'}
-        onPress={() => onTabChange('text')}
       />
       <NavItem
         label={t.settingsTitle}

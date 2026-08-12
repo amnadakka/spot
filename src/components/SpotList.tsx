@@ -37,35 +37,45 @@ type SpotListProps = {
 
 export function SpotSelectionActionBar({
   selectedCount,
-  bulkEnable,
+  bulkEnable = false,
   onBulkToggle,
   onDeleteSelected,
   floating = true,
-}: SpotSelectionFooterState & { floating?: boolean }) {
+  showBulkToggle = true,
+}: {
+  selectedCount: number;
+  onDeleteSelected: () => void;
+  bulkEnable?: boolean;
+  onBulkToggle?: () => void;
+  floating?: boolean;
+  showBulkToggle?: boolean;
+}) {
   const { t } = useI18n();
   const { colors } = useTheme();
   const styles = useStyles();
 
   const bar = (
     <View style={styles.actionBar}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.actionItem,
-          selectedCount === 0 && styles.actionItemDisabled,
-          pressed && selectedCount > 0 && styles.pressedSoft,
-        ]}
-        onPress={onBulkToggle}
-        disabled={selectedCount === 0}
-      >
-        <Ionicons
-          name={bulkEnable ? 'notifications-outline' : 'notifications-off-outline'}
-          size={22}
-          color={selectedCount === 0 ? colors.slate300 : colors.slate700}
-        />
-        <Text style={[styles.actionLabel, selectedCount === 0 && styles.actionLabelDisabled]}>
-          {bulkEnable ? t.turnOnSpots : t.turnOffSpots}
-        </Text>
-      </Pressable>
+      {showBulkToggle ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.actionItem,
+            selectedCount === 0 && styles.actionItemDisabled,
+            pressed && selectedCount > 0 && styles.pressedSoft,
+          ]}
+          onPress={onBulkToggle}
+          disabled={selectedCount === 0}
+        >
+          <Ionicons
+            name={bulkEnable ? 'notifications-outline' : 'notifications-off-outline'}
+            size={22}
+            color={selectedCount === 0 ? colors.slate300 : colors.slate700}
+          />
+          <Text style={[styles.actionLabel, selectedCount === 0 && styles.actionLabelDisabled]}>
+            {bulkEnable ? t.turnOnSpots : t.turnOffSpots}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <Pressable
         style={({ pressed }) => [

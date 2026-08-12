@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,7 +7,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -19,29 +18,14 @@ import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import type { HistoryEvent } from '../types/history';
 
+import { SpotSelectionActionBar } from './SpotList';
+
 type HistoryScreenProps = {
   refreshKey?: number;
   onEventPress?: (event: HistoryEvent) => void;
   onDeleteEvent?: (eventId: string) => void;
   onDeleteEvents?: (eventIds: string[]) => void;
 };
-
-function matchesHistorySearch(event: HistoryEvent, query: string): boolean {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return true;
-  }
-
-  if (event.spotTitle.toLowerCase().includes(normalized)) {
-    return true;
-  }
-
-  if (event.description?.toLowerCase().includes(normalized)) {
-    return true;
-  }
-
-  return false;
-}
 
 function formatHistoryDate(isoDate: string, language: AppLanguage): string {
   return new Date(isoDate).toLocaleDateString(localeTag(language), {
@@ -69,7 +53,6 @@ export default function HistoryScreen({
   const styles = useStyles();
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
@@ -89,14 +72,9 @@ export default function HistoryScreen({
     };
   }, [refreshKey]);
 
-  const filteredEvents = useMemo(
-    () => events.filter((event) => matchesHistorySearch(event, query)),
-    [events, query],
-  );
-
   const selectedCount = selectedIds.size;
   const allSelected =
-    filteredEvents.length > 0 && filteredEvents.every((event) => selectedIds.has(event.id));
+    events.length > 0 && events.every((event) => selectedIds.has(event.id));
 
   const exitSelection = useCallback(() => {
     setSelecting(false);
@@ -125,8 +103,8 @@ export default function HistoryScreen({
       setSelectedIds(new Set());
       return;
     }
-    setSelectedIds(new Set(filteredEvents.map((event) => event.id)));
-  }, [allSelected, filteredEvents]);
+    setSelectedIds(new Set(events.map((event) => event.id)));
+  }, [allSelected, events]);
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedCount === 0) {
@@ -179,26 +157,6 @@ export default function HistoryScreen({
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color={colors.slate400} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t.historySearchPlaceholder}
-            placeholderTextColor={colors.slate400}
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-            clearButtonMode="never"
-          />
-          {query.length > 0 ? (
-            <Pressable onPress={() => setQuery('')} accessibilityLabel={t.clearSearchA11y}>
-              <Ionicons name="close-circle" size={16} color={colors.slate400} />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-
       {selecting ? (
         <View style={styles.selectionHeader}>
           <Pressable
@@ -229,122 +187,89 @@ export default function HistoryScreen({
         </View>
       ) : null}
 
-      {filteredEvents.length === 0 ? (
-        <View style={styles.noResults}>
-          <Text style={styles.noResultsTitle}>{t.historyNoMatchTitle}</Text>
-          <Text style={styles.noResultsSubtitle}>{t.historyNoMatchSubtitle}</Text>
-        </View>
-      ) : (
-        <>
-          <View
-            style={[
-              styles.card,
-              selecting && styles.cardWithActionBar,
-            ]}
-          >
-            <FlatList
-              style={styles.list}
-              data={filteredEvents}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              extraData={{ selecting, selectedIds, query }}
-              renderItem={({ item, index }) => {
-                const isSelected = selectedIds.has(item.id);
-                const isLast = index === filteredEvents.length - 1;
-                const zebra = index % 2 === 1;
+      <View style={styles.card}>
+        <FlatList
+          style={styles.list}
+          data={events}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.listContent,
+            selecting && styles.listContentWithActionBar,
+          ]}
+          showsVerticalScrollIndicator={false}
+          extraData={{ selecting, selectedIds }}
+          renderItem={({ item, index }) => {
+            const isSelected = selectedIds.has(item.id);
+            const isLast = index === events.length - 1;
+            const zebra = index % 2 === 1;
 
-                return (
-                  <View>
-                    <Pressable
-                      style={[
-                        styles.row,
-                        zebra && styles.rowZebra,
-                        selecting && isSelected && styles.rowSelected,
-                      ]}
-                      onPress={() => {
-                        if (selecting) {
-                          toggleSelection(item.id);
-                          return;
-                        }
-                        onEventPress?.(item);
-                      }}
-                      onLongPress={() => {
-                        if (!selecting) {
-                          enterSelection(item.id);
-                        }
-                      }}
-                      delayLongPress={350}
-                    >
-                      {selecting ? (
-                        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                          {isSelected ? (
-                            <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
-                          ) : null}
-                        </View>
-                      ) : null}
-
-                      <View style={styles.info}>
-                        <Text
-                          style={[styles.date, selecting && isSelected && styles.dateSelected]}
-                          numberOfLines={1}
-                        >
-                          {formatHistoryDate(item.triggeredAt, language)}
-                        </Text>
-                        <Text
-                          style={[styles.title, selecting && isSelected && styles.titleSelected]}
-                          numberOfLines={1}
-                        >
-                          {item.spotTitle}
-                        </Text>
-                      </View>
-
-                      <Text
-                        style={[styles.time, selecting && isSelected && styles.timeSelected]}
-                        numberOfLines={1}
-                      >
-                        {formatHistoryTime(item.triggeredAt, language)}
-                      </Text>
-                    </Pressable>
-
-                    {!isLast ? <View style={styles.divider} /> : null}
-                  </View>
-                );
-              }}
-            />
-          </View>
-
-          {selecting ? (
-            <View style={styles.actionBar}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionItem,
-                  selectedCount === 0 && styles.actionItemDisabled,
-                  pressed && selectedCount > 0 && styles.pressedSoft,
-                ]}
-                onPress={handleDeleteSelected}
-                disabled={selectedCount === 0}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={22}
-                  color={selectedCount === 0 ? colors.slate300 : colors.destructive}
-                />
-                <Text
+            return (
+              <View>
+                <Pressable
                   style={[
-                    styles.actionLabel,
-                    styles.actionLabelDestructive,
-                    selectedCount === 0 && styles.actionLabelDisabled,
+                    styles.row,
+                    zebra && styles.rowZebra,
+                    selecting && isSelected && styles.rowSelected,
                   ]}
+                  onPress={() => {
+                    if (selecting) {
+                      toggleSelection(item.id);
+                      return;
+                    }
+                    onEventPress?.(item);
+                  }}
+                  onLongPress={() => {
+                    if (!selecting) {
+                      enterSelection(item.id);
+                    }
+                  }}
+                  delayLongPress={350}
                 >
-                  {t.delete}
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </>
-      )}
+                  {selecting ? (
+                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                      {isSelected ? (
+                        <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  <View style={styles.info}>
+                    <Text
+                      style={[styles.date, selecting && isSelected && styles.dateSelected]}
+                      numberOfLines={1}
+                    >
+                      {formatHistoryDate(item.triggeredAt, language)}
+                    </Text>
+                    <Text
+                      style={[styles.title, selecting && isSelected && styles.titleSelected]}
+                      numberOfLines={1}
+                    >
+                      {item.spotTitle}
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[styles.time, selecting && isSelected && styles.timeSelected]}
+                    numberOfLines={1}
+                  >
+                    {formatHistoryTime(item.triggeredAt, language)}
+                  </Text>
+                </Pressable>
+
+                {!isLast ? <View style={styles.divider} /> : null}
+              </View>
+            );
+          }}
+        />
+      </View>
+
+      {selecting ? (
+        <SpotSelectionActionBar
+          selectedCount={selectedCount}
+          onDeleteSelected={handleDeleteSelected}
+          showBulkToggle={false}
+        />
+      ) : null}
     </View>
   );
 }
@@ -382,32 +307,6 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 14,
     color: colors.slate400,
     textAlign: 'center',
-  },
-  searchWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    borderRadius: radii.xl,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.slate700,
-    padding: 0,
   },
   selectionHeader: {
     flexDirection: 'row',
@@ -462,23 +361,6 @@ const useStyles = makeStyles((colors) => ({
     fontWeight: '600',
     color: colors.slate800,
   },
-  noResults: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
-    gap: spacing.sm,
-  },
-  noResultsTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.slate700,
-  },
-  noResultsSubtitle: {
-    fontSize: 13,
-    color: colors.slate400,
-    textAlign: 'center',
-  },
   card: {
     flex: 1,
     marginHorizontal: spacing.lg,
@@ -494,14 +376,14 @@ const useStyles = makeStyles((colors) => ({
     shadowRadius: 4,
     elevation: 1,
   },
-  cardWithActionBar: {
-    marginBottom: 96,
-  },
   list: {
     flex: 1,
   },
   listContent: {
     flexGrow: 1,
+  },
+  listContentWithActionBar: {
+    paddingBottom: 120,
   },
   row: {
     flexDirection: 'row',
@@ -568,47 +450,5 @@ const useStyles = makeStyles((colors) => ({
   },
   pressedSoft: {
     opacity: 0.7,
-  },
-  actionBar: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    bottom: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  actionItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radii.md,
-  },
-  actionItemDisabled: {
-    opacity: 0.45,
-  },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.slate700,
-  },
-  actionLabelDestructive: {
-    color: colors.destructive,
-  },
-  actionLabelDisabled: {
-    color: colors.slate300,
   },
 }));

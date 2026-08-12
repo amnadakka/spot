@@ -1,10 +1,14 @@
-export type ScheduleDateMode = 'once' | 'daily' | 'weekly';
+export type ScheduleDateMode = 'once' | 'oneshot' | 'daily' | 'weekly';
 
 export type ReminderSchedule = {
   /** One-time local calendar date in YYYY-MM-DD format. */
   date?: string;
-  /** Repeat every day (mutually exclusive with `date` and `weekdays`). */
-  repeat?: 'daily';
+  /**
+   * `daily` — every day (recurring).
+   * `once` — fire on any day, then auto-delete after trigger (no calendar date).
+   * Mutually exclusive with `date` and `weekdays`.
+   */
+  repeat?: 'daily' | 'once';
   /** Local weekdays when active — 0 = Sunday … 6 = Saturday (mutually exclusive with `date` and `repeat`). */
   weekdays?: number[];
   /** Local time in HH:mm — start of the active window when geofence alarms may fire. */

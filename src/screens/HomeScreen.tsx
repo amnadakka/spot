@@ -70,7 +70,9 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
   const [detailTriggeredAt, setDetailTriggeredAt] = useState<string | null>(null);
-  const [detailOrigin, setDetailOrigin] = useState<'home' | 'calendar' | 'history'>('home');
+  const [detailOrigin, setDetailOrigin] = useState<'home' | 'calendar' | 'history' | 'text'>(
+    'home',
+  );
   const [homeBodyHeight, setHomeBodyHeight] = useState(0);
 
   const locationStatus = useUserLocation(true);
@@ -127,11 +129,20 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const openSpotDetail = useCallback(
     (
       reminder: Reminder,
-      options?: { triggeredAt?: string | null; origin?: 'home' | 'calendar' | 'history' },
+      options?: {
+        triggeredAt?: string | null;
+        origin?: 'home' | 'calendar' | 'history' | 'text';
+      },
     ) => {
       const origin =
         options?.origin ??
-        (activeTab === 'history' ? 'history' : activeTab === 'calendar' ? 'calendar' : 'home');
+        (activeTab === 'history'
+          ? 'history'
+          : activeTab === 'calendar'
+            ? 'calendar'
+            : activeTab === 'text'
+              ? 'text'
+              : 'home');
       setDetailOrigin(origin);
       setDetailTriggeredAt(options?.triggeredAt ?? null);
       setSelectedReminder(reminder);
@@ -512,7 +523,14 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
         ) : null}
 
         {screen === 'calendar' ? (
-          <CalendarScreen reminders={reminders} onSpotPress={navigateToSpotDetail} />
+          <CalendarScreen
+            reminders={reminders}
+            onSpotPress={navigateToSpotDetail}
+            onSetEnabledMany={handleSetEnabledMany}
+            onDeleteMany={handleDeleteMany}
+            onAdd={handleAdd}
+            addDisabled={atSpotLimit}
+          />
         ) : null}
 
         {screen === 'history' && (
@@ -524,7 +542,16 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
           />
         )}
 
-        {screen === 'text' ? <TextScreen reminders={reminders} /> : null}
+        {screen === 'text' ? (
+          <TextScreen
+            reminders={reminders}
+            onAdd={handleAdd}
+            addDisabled={atSpotLimit}
+            onSpotPress={navigateToSpotDetail}
+            onSetEnabledMany={handleSetEnabledMany}
+            onDeleteMany={handleDeleteMany}
+          />
+        ) : null}
 
         {screen === 'settings' ? <SettingsScreen /> : null}
 
@@ -547,6 +574,13 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
             triggeredAt={detailTriggeredAt ?? undefined}
             allowEdit={reminders.some((reminder) => reminder.id === selectedReminder.id)}
             onUpdate={handleUpdateReminder}
+            onDelete={(reminderId) => {
+              handleDeleteMany([reminderId]);
+              setSelectedReminder(null);
+              setDetailTriggeredAt(null);
+              setScreen(detailOrigin);
+              setActiveTab(detailOrigin);
+            }}
           />
         ) : null}
       </View>

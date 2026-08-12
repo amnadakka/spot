@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useI18n } from '../i18n/I18nContext';
 import { fill, localeTag } from '../i18n/translations';
@@ -15,6 +15,8 @@ import {
   isScheduleActiveOnDate,
 } from '../utils/reminderSchedule';
 
+import { SpotSelectionActionBar } from './SpotList';
+
 function isReminderScheduledOnDate(reminder: Reminder, date: Date): boolean {
   // Always-on spots without a schedule stay on Home — calendar focuses on dated windows.
   if (!hasScheduleTiming(reminder.schedule)) {
@@ -27,6 +29,10 @@ function isReminderScheduledOnDate(reminder: Reminder, date: Date): boolean {
 type CalendarScreenProps = {
   reminders: Reminder[];
   onSpotPress?: (reminderId: string) => void;
+  onSetEnabledMany?: (ids: string[], enabled: boolean) => void;
+  onDeleteMany?: (ids: string[]) => void;
+  onAdd?: () => void;
+  addDisabled?: boolean;
 };
 
 type CalendarCell = {
@@ -81,7 +87,14 @@ function buildMonthCells(month: Date, reminders: Reminder[], today: Date): Calen
   return cells;
 }
 
-export default function CalendarScreen({ reminders, onSpotPress }: CalendarScreenProps) {
+export default function CalendarScreen({
+  reminders,
+  onSpotPress,
+  onSetEnabledMany,
+  onDeleteMany,
+  onAdd,
+  addDisabled = false,
+}: CalendarScreenProps) {
   const { t, language, isRTL } = useI18n();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -90,6 +103,8 @@ export default function CalendarScreen({ reminders, onSpotPress }: CalendarScree
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selectedDate, setSelectedDate] = useState(() => today);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const weekdayLabels = useMemo(() => {
     const sunday = new Date(2024, 0, 7);
@@ -130,6 +145,111 @@ export default function CalendarScreen({ reminders, onSpotPress }: CalendarScree
     () => reminders.filter((reminder) => isReminderScheduledOnDate(reminder, selectedDate)),
     [reminders, selectedDate],
   );
+
+  const selectedCount = selectedIds.size;
+  const allSelected = dayReminders.length > 0 && selectedCount === dayReminders.length;
+  const selectedReminders = useMemo(
+    () => dayReminders.filter((reminder) => selectedIds.has(reminder.id)),
+    [dayReminders, selectedIds],
+  );
+  const allSelectedEnabled =
+    selectedReminders.length > 0 && selectedReminders.every((reminder) => reminder.enabled);
+  const bulkEnable = !allSelectedEnabled;
+  const canSelect = Boolean(onSetEnabledMany || onDeleteMany);
+
+  const exitSelection = useCallback(() => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const enterSelection = useCallback((id: string) => {
+    setSelecting(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllPress = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(dayReminders.map((reminder) => reminder.id)));
+  }, [allSelected, dayReminders]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!onDeleteMany || selectedCount === 0) {
+      return;
+    }
+
+    const ids = [...selectedIds];
+    const message =
+      selectedCount === 1
+        ? t.deleteSpotConfirmOne
+        : fill(t.deleteSpotsConfirmMany, { count: selectedCount });
+
+    Alert.alert(t.deleteSpotsTitle, message, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete,
+        style: 'destructive',
+        onPress: () => {
+          onDeleteMany(ids);
+          exitSelection();
+        },
+      },
+    ]);
+  }, [exitSelection, onDeleteMany, selectedCount, selectedIds, t]);
+
+  const handleBulkToggle = useCallback(() => {
+    if (!onSetEnabledMany || selectedCount === 0) {
+      return;
+    }
+    onSetEnabledMany([...selectedIds], bulkEnable);
+  }, [bulkEnable, onSetEnabledMany, selectedCount, selectedIds]);
+
+  const handleAddPress = useCallback(() => {
+    if (!onAdd) {
+      return;
+    }
+    if (addDisabled) {
+      Alert.alert(t.spotLimitTitle, t.spotLimitMessage);
+      return;
+    }
+    onAdd();
+  }, [addDisabled, onAdd, t]);
+
+  // Leave selection when the day changes or the list empties.
+  useEffect(() => {
+    exitSelection();
+  }, [selectedDate, exitSelection]);
+
+  useEffect(() => {
+    if (selecting && dayReminders.length === 0) {
+      exitSelection();
+    }
+  }, [dayReminders.length, exitSelection, selecting]);
+
+  useEffect(() => {
+    if (!selecting) {
+      return;
+    }
+    const validIds = new Set(dayReminders.map((reminder) => reminder.id));
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [dayReminders, selecting]);
 
   const goToPreviousMonth = () => {
     setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -237,12 +357,65 @@ export default function CalendarScreen({ reminders, onSpotPress }: CalendarScree
       </View>
 
       <View style={styles.dayDetails}>
-        <Text style={styles.dayDetailsTitle}>{selectedDateLabel}</Text>
-        <Text style={styles.dayDetailsSubtitle}>
-          {dayReminders.length === 0
-            ? t.calendarNoReminders
-            : fill(t.calendarReminderCount, { count: dayReminders.length })}
-        </Text>
+        {selecting ? (
+          <View style={styles.selectionHeader}>
+            <Pressable
+              style={({ pressed }) => [styles.selectAllBtn, pressed && styles.pressedSoft]}
+              onPress={handleSelectAllPress}
+              accessibilityRole="button"
+              accessibilityLabel={allSelected ? t.deselectAll : t.selectAll}
+            >
+              <Text style={styles.selectAllLabel} numberOfLines={1}>
+                {allSelected ? t.deselectAll : t.selectAll}
+              </Text>
+            </Pressable>
+            <Text
+              style={styles.selectionCount}
+              accessibilityRole="text"
+              accessibilityLiveRegion="polite"
+            >
+              {fill(t.selectedCount, { count: selectedCount })}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressedSoft]}
+              onPress={exitSelection}
+              accessibilityRole="button"
+              accessibilityLabel={t.cancel}
+            >
+              <Text style={styles.cancelLabel}>{t.cancel}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.dayDetailsHeader}>
+            <View style={styles.dayDetailsHeaderMain}>
+              <Text style={styles.dayDetailsTitle}>{selectedDateLabel}</Text>
+              <Text style={styles.dayDetailsSubtitle}>
+                {dayReminders.length === 0
+                  ? t.calendarNoReminders
+                  : fill(t.calendarReminderCount, { count: dayReminders.length })}
+              </Text>
+            </View>
+            {onAdd ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.addBtn,
+                  addDisabled && styles.addBtnDisabled,
+                  pressed && !addDisabled && styles.pressedSoft,
+                ]}
+                onPress={handleAddPress}
+                accessibilityRole="button"
+                accessibilityLabel={t.addNewSpotA11y}
+                accessibilityState={{ disabled: addDisabled }}
+              >
+                <Ionicons
+                  name="add"
+                  size={26}
+                  color={addDisabled ? colors.slate300 : colors.accent}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+        )}
 
         {dayReminders.length === 0 ? (
           <View style={styles.emptyState}>
@@ -250,65 +423,117 @@ export default function CalendarScreen({ reminders, onSpotPress }: CalendarScree
             <Text style={styles.emptyText}>{t.calendarEmptyHint}</Text>
           </View>
         ) : (
-          <FlatList
-            data={dayReminders}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => {
-              const scheduleLabel =
-                formatScheduleSummary(item.schedule, language) ?? t.anyTime;
+          <View style={styles.listWrap}>
+            <FlatList
+              data={dayReminders}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={[
+                styles.listContent,
+                selecting && styles.listContentWithActionBar,
+              ]}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const scheduleLabel =
+                  formatScheduleSummary(item.schedule, language) ?? t.anyTime;
+                const isSelected = selectedIds.has(item.id);
 
-              return (
-                <Pressable
-                  style={({ pressed }) => [styles.reminderCard, pressed && styles.reminderCardPressed]}
-                  onPress={() => onSpotPress?.(item.id)}
-                  disabled={!onSpotPress}
-                >
-                  <View
-                    style={[
-                      styles.reminderIcon,
-                      !item.enabled && styles.reminderIconPaused,
+                return (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.reminderCard,
+                      selecting && isSelected && styles.reminderCardSelected,
+                      pressed && styles.reminderCardPressed,
                     ]}
+                    onPress={() => {
+                      if (selecting) {
+                        toggleSelection(item.id);
+                        return;
+                      }
+                      onSpotPress?.(item.id);
+                    }}
+                    onLongPress={() => {
+                      if (canSelect && !selecting) {
+                        enterSelection(item.id);
+                      }
+                    }}
+                    delayLongPress={350}
+                    accessibilityRole={selecting ? 'checkbox' : 'button'}
+                    accessibilityState={selecting ? { checked: isSelected } : undefined}
+                    accessibilityLabel={item.title}
                   >
-                    <Ionicons
-                      name="location"
-                      size={18}
-                      color={item.enabled ? colors.accent : colors.slate400}
-                    />
-                  </View>
-                  <View style={styles.reminderCopy}>
-                    <Text style={styles.reminderTitle} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.reminderMeta} numberOfLines={1}>
-                      {scheduleLabel}
-                    </Text>
-                    <Text style={styles.reminderAddress} numberOfLines={1}>
-                      {item.address}
-                    </Text>
-                  </View>
-                  <View style={styles.reminderStatus}>
-                    <Text
-                      style={[
-                        styles.reminderStatusLabel,
-                        item.enabled ? styles.reminderStatusActive : styles.reminderStatusPaused,
-                      ]}
-                    >
-                      {item.enabled ? t.statusActive : t.statusPaused}
-                    </Text>
-                    {onSpotPress ? (
-                      <Ionicons
-                        name={isRTL ? 'chevron-back' : 'chevron-forward'}
-                        size={16}
-                        color={colors.slate400}
-                      />
+                    {selecting ? (
+                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                        {isSelected ? (
+                          <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+                        ) : null}
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.reminderIcon,
+                          !item.enabled && styles.reminderIconPaused,
+                        ]}
+                      >
+                        <Ionicons
+                          name="location"
+                          size={18}
+                          color={item.enabled ? colors.accent : colors.slate400}
+                        />
+                      </View>
+                    )}
+                    <View style={styles.reminderCopy}>
+                      <Text
+                        style={[
+                          styles.reminderTitle,
+                          selecting && isSelected && styles.reminderTitleSelected,
+                          !item.enabled && !selecting && styles.reminderTitlePaused,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                      <Text style={styles.reminderMeta} numberOfLines={1}>
+                        {scheduleLabel}
+                      </Text>
+                      <Text style={styles.reminderAddress} numberOfLines={1}>
+                        {item.address}
+                      </Text>
+                    </View>
+                    {!selecting ? (
+                      <View style={styles.reminderStatus}>
+                        <Text
+                          style={[
+                            styles.reminderStatusLabel,
+                            item.enabled
+                              ? styles.reminderStatusActive
+                              : styles.reminderStatusPaused,
+                          ]}
+                        >
+                          {item.enabled ? t.statusActive : t.statusPaused}
+                        </Text>
+                        {onSpotPress ? (
+                          <Ionicons
+                            name={isRTL ? 'chevron-back' : 'chevron-forward'}
+                            size={16}
+                            color={colors.slate400}
+                          />
+                        ) : null}
+                      </View>
                     ) : null}
-                  </View>
-                </Pressable>
-              );
-            }}
-          />
+                  </Pressable>
+                );
+              }}
+            />
+
+            {selecting ? (
+              <SpotSelectionActionBar
+                selectedCount={selectedCount}
+                bulkEnable={bulkEnable}
+                onBulkToggle={handleBulkToggle}
+                onDeleteSelected={handleDeleteSelected}
+              />
+            ) : null}
+          </View>
         )}
       </View>
     </View>
@@ -447,6 +672,16 @@ const useStyles = makeStyles((colors) => ({
     flex: 1,
     minHeight: 0,
   },
+  dayDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  dayDetailsHeaderMain: {
+    flex: 1,
+    minWidth: 0,
+  },
   dayDetailsTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -454,9 +689,63 @@ const useStyles = makeStyles((colors) => ({
   },
   dayDetailsSubtitle: {
     marginTop: spacing.xs,
-    marginBottom: spacing.md,
     fontSize: 14,
     color: colors.mutedForeground,
+  },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  addBtnDisabled: {
+    opacity: 0.5,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    minHeight: 40,
+    gap: spacing.sm,
+  },
+  selectAllBtn: {
+    flexShrink: 1,
+    minWidth: 48,
+    maxWidth: 130,
+    alignItems: 'flex-start',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  selectAllLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.slate800,
+  },
+  selectionCount: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.slate900,
+    letterSpacing: -0.3,
+  },
+  cancelBtn: {
+    flexShrink: 1,
+    minWidth: 48,
+    alignItems: 'flex-end',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  cancelLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.slate800,
+  },
+  pressedSoft: {
+    opacity: 0.7,
   },
   emptyState: {
     alignItems: 'center',
@@ -470,9 +759,16 @@ const useStyles = makeStyles((colors) => ({
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
   },
+  listWrap: {
+    flex: 1,
+    minHeight: 0,
+  },
   listContent: {
     gap: spacing.md,
     paddingBottom: spacing.xxl,
+  },
+  listContentWithActionBar: {
+    paddingBottom: 120,
   },
   reminderCard: {
     flexDirection: 'row',
@@ -487,6 +783,23 @@ const useStyles = makeStyles((colors) => ({
   },
   reminderCardPressed: {
     backgroundColor: colors.slate50,
+  },
+  reminderCardSelected: {
+    backgroundColor: colors.slate50,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.slate300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   reminderIcon: {
     width: 36,
@@ -508,6 +821,12 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 15,
     fontWeight: '600',
     color: colors.foreground,
+  },
+  reminderTitlePaused: {
+    color: colors.slate500,
+  },
+  reminderTitleSelected: {
+    color: colors.slate400,
   },
   reminderMeta: {
     fontSize: 13,
