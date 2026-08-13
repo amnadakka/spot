@@ -34,6 +34,7 @@ export default function OnboardingPermissionsScreen({
             <PermissionAccessRows
               notifications={permissions.notifications}
               location={permissions.location}
+              fullScreenIntent={permissions.fullScreenIntent}
               onChanged={permissions.refresh}
             />
           </SettingsSection>

@@ -1,14 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, {
   BottomSheetFooter,
-  BottomSheetScrollView,
+  BottomSheetView,
   type BottomSheetFooterProps,
 } from '@gorhom/bottom-sheet';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 
 import { useI18n } from '../i18n/I18nContext';
 import { fill } from '../i18n/translations';
 import { makeStyles } from '../theme/makeStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import { MAX_ACTIVE_SPOTS, type Reminder } from '../types/reminder';
 
@@ -29,7 +31,10 @@ type HomeSpotsSheetProps = {
   onSpotPress: (id: string) => void;
 };
 
-const SNAP_POINTS = ['20%', '48%', '90%'];
+const SNAP_POINTS = ['22%', '48%', '90%'];
+const SNAP_MINIMAL = 0;
+const SNAP_MIDDLE = 1;
+const SNAP_EXPANDED = 2;
 
 export default function HomeSpotsSheet({
   reminders,
@@ -42,9 +47,11 @@ export default function HomeSpotsSheet({
   onSpotPress,
 }: HomeSpotsSheetProps) {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const styles = useStyles();
   const sheetRef = useRef<BottomSheet>(null);
   const wasSelectingRef = useRef(false);
+  const [snapIndex, setSnapIndex] = useState(SNAP_MIDDLE);
   const [selectionFooter, setSelectionFooter] = useState<SpotSelectionFooterState | null>(null);
 
   const activeCount = reminders.filter((reminder) => reminder.enabled).length;
@@ -53,12 +60,27 @@ export default function HomeSpotsSheet({
       ? fill(t.activeOfTotal, { active: activeCount, total: reminders.length })
       : fill(t.upToActiveSpots, { count: MAX_ACTIVE_SPOTS });
 
+  const handleSnapIndexChange = useCallback((index: number) => {
+    if (index < 0) {
+      return;
+    }
+    setSnapIndex(index);
+  }, []);
+
+  const handleAddPress = useCallback(() => {
+    if (atSpotLimit) {
+      Alert.alert(t.spotLimitTitle, t.spotLimitMessage);
+      return;
+    }
+    onAdd();
+  }, [atSpotLimit, onAdd, t.spotLimitMessage, t.spotLimitTitle]);
+
   const handleSheetSelectionChange = useCallback((state: SpotSelectionFooterState | null) => {
     const isSelecting = state != null;
     if (!wasSelectingRef.current && isSelecting) {
       // Give selection UI room when starting from the minimal snap; footer stays
       // pinned if the user collapses again.
-      sheetRef.current?.snapToIndex(1);
+      sheetRef.current?.snapToIndex(SNAP_MIDDLE);
     }
     wasSelectingRef.current = isSelecting;
     setSelectionFooter(state);
@@ -95,10 +117,46 @@ export default function HomeSpotsSheet({
     [reminders.length, styles, subtitle, t.spotsTitle],
   );
 
+  const headerWithAdd = useMemo(
+    () => (
+      <View style={styles.headerRow}>
+        <View style={styles.headerMain}>{header}</View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.addBtn,
+            atSpotLimit && styles.addBtnDisabled,
+            pressed && !atSpotLimit && styles.addBtnPressed,
+          ]}
+          onPress={handleAddPress}
+          accessibilityLabel={t.addNewSpotA11y}
+          accessibilityState={{ disabled: atSpotLimit }}
+        >
+          <Ionicons
+            name="add"
+            size={26}
+            color={atSpotLimit ? colors.slate300 : colors.accent}
+          />
+        </Pressable>
+      </View>
+    ),
+    [
+      atSpotLimit,
+      colors.accent,
+      colors.slate300,
+      handleAddPress,
+      header,
+      styles,
+      t.addNewSpotA11y,
+    ],
+  );
+
+  const showEmptyBody = snapIndex >= SNAP_MIDDLE;
+  const showEmptyCta = snapIndex >= SNAP_EXPANDED;
+
   return (
     <BottomSheet
       ref={sheetRef}
-      index={1}
+      index={SNAP_MIDDLE}
       snapPoints={SNAP_POINTS}
       enableDynamicSizing={false}
       enablePanDownToClose={false}
@@ -107,12 +165,18 @@ export default function HomeSpotsSheet({
       handleIndicatorStyle={styles.handle}
       backgroundStyle={styles.background}
       style={styles.sheet}
+      onAnimate={(_fromIndex, toIndex) => handleSnapIndexChange(toIndex)}
+      onChange={handleSnapIndexChange}
     >
       {reminders.length === 0 ? (
-        <BottomSheetScrollView contentContainerStyle={styles.emptyScroll}>
-          <View style={styles.emptyHeader}>{header}</View>
-          <EmptyState onCreateFirst={onAdd} />
-        </BottomSheetScrollView>
+        <BottomSheetView style={styles.emptyContainer}>
+          <View style={styles.emptyHeader}>{headerWithAdd}</View>
+          {showEmptyBody ? (
+            <View style={styles.emptyBody}>
+              <EmptyState onCreateFirst={onAdd} showCta={showEmptyCta} />
+            </View>
+          ) : null}
+        </BottomSheetView>
       ) : (
         <SpotList
           reminders={reminders}
@@ -179,10 +243,40 @@ const useStyles = makeStyles((colors) => ({
     fontWeight: '700',
     color: colors.slate600,
   },
-  emptyScroll: {
-    paddingBottom: spacing.xxl,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  headerMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    backgroundColor: colors.primaryMuted,
+  },
+  addBtnDisabled: {
+    opacity: 0.5,
+  },
+  addBtnPressed: {
+    opacity: 0.85,
+  },
+  emptyContainer: {
+    flex: 1,
+    overflow: 'hidden',
   },
   emptyHeader: {
     paddingHorizontal: spacing.xl,
+  },
+  emptyBody: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 0,
   },
 }));

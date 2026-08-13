@@ -45,7 +45,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.USE_FULL_SCREEN_INTENT"
       ],
       "package": "com.anonymous.spot"
     },
@@ -90,6 +91,7 @@
     ],
     "extra": {
       "supportsRTL": true,
+      "googleMapsApiKey": "AIzaSyBFDYwkRVeYWVjMUIB6cljUGl7iw_E8IlM",
       "eas": {
         "projectId": "81f4989c-9bb5-4c74-ac1f-2baeecd38d09"
       }

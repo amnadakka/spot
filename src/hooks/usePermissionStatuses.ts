@@ -1,8 +1,12 @@
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
+import {
+  canUseFullScreenIntent,
+  isSpotAlarmNativeAvailable,
+} from '../services/spotAlarmNative';
 
 export type NotificationPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -12,9 +16,12 @@ export type LocationPermissionStatus =
   | 'denied'
   | 'undetermined';
 
+export type FullScreenIntentStatus = 'granted' | 'denied' | 'unsupported';
+
 export type PermissionStatuses = {
   notifications: NotificationPermissionStatus;
   location: LocationPermissionStatus;
+  fullScreenIntent: FullScreenIntentStatus;
   loading: boolean;
   refresh: () => void;
 };
@@ -38,6 +45,14 @@ async function readNotificationStatus(): Promise<NotificationPermissionStatus> {
   return current.status === 'denied' ? 'denied' : 'undetermined';
 }
 
+async function readFullScreenIntentStatus(): Promise<FullScreenIntentStatus> {
+  if (Platform.OS !== 'android' || !isSpotAlarmNativeAvailable()) {
+    return 'unsupported';
+  }
+
+  return canUseFullScreenIntent() ? 'granted' : 'denied';
+}
+
 async function readLocationStatus(): Promise<LocationPermissionStatus> {
   const foreground = await Location.getForegroundPermissionsAsync();
 
@@ -55,6 +70,7 @@ async function readLocationStatus(): Promise<LocationPermissionStatus> {
 export function usePermissionStatuses(): PermissionStatuses {
   const [notifications, setNotifications] = useState<NotificationPermissionStatus>('undetermined');
   const [location, setLocation] = useState<LocationPermissionStatus>('undetermined');
+  const [fullScreenIntent, setFullScreenIntent] = useState<FullScreenIntentStatus>('unsupported');
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -68,13 +84,15 @@ export function usePermissionStatuses(): PermissionStatuses {
     async function load() {
       setLoading(true);
       try {
-        const [nextNotifications, nextLocation] = await Promise.all([
+        const [nextNotifications, nextLocation, nextFullScreenIntent] = await Promise.all([
           readNotificationStatus(),
           readLocationStatus(),
+          readFullScreenIntentStatus(),
         ]);
         if (!cancelled) {
           setNotifications(nextNotifications);
           setLocation(nextLocation);
+          setFullScreenIntent(nextFullScreenIntent);
         }
       } finally {
         if (!cancelled) {
@@ -101,5 +119,5 @@ export function usePermissionStatuses(): PermissionStatuses {
     return () => subscription.remove();
   }, [refresh]);
 
-  return { notifications, location, loading, refresh };
+  return { notifications, location, fullScreenIntent, loading, refresh };
 }

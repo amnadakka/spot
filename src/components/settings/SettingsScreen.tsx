@@ -55,6 +55,7 @@ export default function SettingsScreen() {
           <PermissionAccessRows
             notifications={permissions.notifications}
             location={permissions.location}
+            fullScreenIntent={permissions.fullScreenIntent}
             onChanged={permissions.refresh}
             locationIsLast={false}
           />

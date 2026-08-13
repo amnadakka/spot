@@ -10,6 +10,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import type { Reminder } from '../types/reminder';
 
+import ConfirmDialog from './ui/ConfirmDialog';
 import Toggle from './ui/Toggle';
 
 export type SpotSelectionFooterState = {
@@ -135,6 +136,11 @@ export default function SpotList({
   const occupiedIconBg = theme === 'night' ? '#7F1D1D' : '#FEE2E2';
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const selectedCount = selectedIds.size;
   const allSelected = reminders.length > 0 && selectedCount === reminders.length;
@@ -188,17 +194,15 @@ export default function SpotList({
         ? t.deleteSpotConfirmOne
         : fill(t.deleteSpotsConfirmMany, { count: selectedCount });
 
-    Alert.alert(t.deleteSpotsTitle, message, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: () => {
-          onDeleteMany(ids);
-          exitSelection();
-        },
+    setDeleteConfirm({
+      title: t.deleteSpotsTitle,
+      message,
+      onConfirm: () => {
+        onDeleteMany(ids);
+        exitSelection();
+        setDeleteConfirm(null);
       },
-    ]);
+    });
   }, [exitSelection, onDeleteMany, selectedCount, selectedIds, t]);
 
   const handleBulkToggle = useCallback(() => {
@@ -427,16 +431,31 @@ export default function SpotList({
     </>
   );
 
+  const deleteDialog = (
+    <ConfirmDialog
+      visible={deleteConfirm != null}
+      title={deleteConfirm?.title ?? ''}
+      message={deleteConfirm?.message ?? ''}
+      cancelLabel={t.cancel}
+      confirmLabel={t.delete}
+      onCancel={() => setDeleteConfirm(null)}
+      onConfirm={() => deleteConfirm?.onConfirm()}
+    />
+  );
+
   // Sheet mode: actions are pinned via BottomSheetFooter in the parent.
   if (sheetMode) {
     return (
-      <BottomSheetScrollView
-        style={styles.list}
-        contentContainerStyle={contentContainerStyle}
-        showsVerticalScrollIndicator={false}
-      >
-        {listBody}
-      </BottomSheetScrollView>
+      <>
+        <BottomSheetScrollView
+          style={styles.list}
+          contentContainerStyle={contentContainerStyle}
+          showsVerticalScrollIndicator={false}
+        >
+          {listBody}
+        </BottomSheetScrollView>
+        {deleteDialog}
+      </>
     );
   }
 
@@ -457,6 +476,7 @@ export default function SpotList({
           onDeleteSelected={handleDeleteSelected}
         />
       ) : null}
+      {deleteDialog}
     </View>
   );
 }
@@ -496,6 +516,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+    backgroundColor: colors.primaryMuted,
   },
   addBtnDisabled: {
     opacity: 0.5,

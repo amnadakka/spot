@@ -16,6 +16,7 @@ import {
 } from '../utils/reminderSchedule';
 
 import { SpotSelectionActionBar } from './SpotList';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 function isReminderScheduledOnDate(reminder: Reminder, date: Date): boolean {
   // Always-on spots without a schedule stay on Home — calendar focuses on dated windows.
@@ -105,6 +106,11 @@ export default function CalendarScreen({
   const [selectedDate, setSelectedDate] = useState(() => today);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const weekdayLabels = useMemo(() => {
     const sunday = new Date(2024, 0, 7);
@@ -198,17 +204,15 @@ export default function CalendarScreen({
         ? t.deleteSpotConfirmOne
         : fill(t.deleteSpotsConfirmMany, { count: selectedCount });
 
-    Alert.alert(t.deleteSpotsTitle, message, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: () => {
-          onDeleteMany(ids);
-          exitSelection();
-        },
+    setDeleteConfirm({
+      title: t.deleteSpotsTitle,
+      message,
+      onConfirm: () => {
+        onDeleteMany(ids);
+        exitSelection();
+        setDeleteConfirm(null);
       },
-    ]);
+    });
   }, [exitSelection, onDeleteMany, selectedCount, selectedIds, t]);
 
   const handleBulkToggle = useCallback(() => {
@@ -536,6 +540,16 @@ export default function CalendarScreen({
           </View>
         )}
       </View>
+
+      <ConfirmDialog
+        visible={deleteConfirm != null}
+        title={deleteConfirm?.title ?? ''}
+        message={deleteConfirm?.message ?? ''}
+        cancelLabel={t.cancel}
+        confirmLabel={t.delete}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm?.onConfirm()}
+      />
     </View>
   );
 }

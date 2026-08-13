@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import GeofenceAlarmRingingLayer from './src/components/GeofenceAlarmRingingLayer';
 import OnboardingPermissionsScreen from './src/components/OnboardingPermissionsScreen';
 import { useBatteryOptimizationCheck } from './src/hooks/useBatteryOptimizationCheck';
+import { useFullScreenIntentCheck } from './src/hooks/useFullScreenIntentCheck';
 import { useGeofenceAlarmRinging } from './src/hooks/useGeofenceAlarmRinging';
 import { usePendingHistoryDrain } from './src/hooks/usePendingHistoryDrain';
 import { useNotificationResponseHandler } from './src/hooks/useNotificationResponseHandler';
@@ -119,9 +120,11 @@ function AppContent() {
 
   usePendingHistoryDrain();
   useBatteryOptimizationCheck(!needsOnboarding && onboardingChecked);
+  useFullScreenIntentCheck(!needsOnboarding && onboardingChecked);
 
-  useNotificationResponseHandler((regionId) => {
-    startAlarmForRegion(regionId);
+  useNotificationResponseHandler({
+    onOpen: startAlarmForRegion,
+    onDismiss: dismissActiveAlarm,
   });
 
   const handleOnboardingComplete = useCallback(() => {

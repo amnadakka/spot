@@ -12,7 +12,13 @@ import {
 
 import { useI18n } from '../i18n/I18nContext';
 import { getCurrentCoordinates } from '../services/getCurrentCoordinates';
-import { forwardGeocode, reverseGeocode } from '../services/reverseGeocode';
+import {
+  createPlacesSessionToken,
+  fetchPlaceDetails,
+  fetchPlaceSuggestions,
+  type PlaceSuggestion,
+} from '../services/placesAutocomplete';
+import { reverseGeocode } from '../services/reverseGeocode';
 import { makeStyles } from '../theme/makeStyles';
 import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
@@ -27,12 +33,6 @@ type MapPickerScreenProps = {
   onLocationPicked: (location: PickedLocation) => void;
 };
 
-type SearchResult = {
-  latitude: number;
-  longitude: number;
-  label: string;
-};
-
 export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenProps) {
   const { t } = useI18n();
   const { colors } = useTheme();
@@ -40,12 +40,21 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
   const [addressLabel, setAddressLabel] = useState(t.loadingLocation);
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapLoading, setMapLoading] = useState(true);
   const [geocoding, setGeocoding] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [resolvingPlace, setResolvingPlace] = useState(false);
+  const [mapFocusToken, setMapFocusToken] = useState(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionTokenRef = useRef(createPlacesSessionToken());
+  const searchRequestIdRef = useRef(0);
+  const coordinateRef = useRef<MapCoordinate | null>(null);
+
+  useEffect(() => {
+    coordinateRef.current = coordinate;
+  }, [coordinate]);
 
   const updateAddress = useCallback(async (next: MapCoordinate) => {
     setGeocoding(true);
@@ -98,6 +107,7 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
     try {
       const next = await getCurrentCoordinates();
       setCoordinate(next);
+      setMapFocusToken((token) => token + 1);
       await updateAddress(next);
     } catch {
       // Keep current map position.
@@ -119,22 +129,48 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
       return;
     }
 
+    const requestId = ++searchRequestIdRef.current;
     searchTimer.current = setTimeout(() => {
-      void forwardGeocode(text).then(setSuggestions);
+      const bias = coordinateRef.current;
+      void fetchPlaceSuggestions(text, {
+        sessionToken: sessionTokenRef.current,
+        locationBias: bias
+          ? {
+              latitude: bias.latitude,
+              longitude: bias.longitude,
+            }
+          : undefined,
+      }).then((nextSuggestions) => {
+        if (requestId !== searchRequestIdRef.current) {
+          return;
+        }
+        setSuggestions(nextSuggestions);
+      });
     }, 350);
   }, []);
 
-  const handleSuggestionPress = useCallback(
-    async (result: SearchResult) => {
-      setQuery(result.label);
-      setShowSuggestions(false);
-      setSuggestions([]);
-      const next = { latitude: result.latitude, longitude: result.longitude };
+  const handleSuggestionPress = useCallback(async (result: PlaceSuggestion) => {
+    setQuery(result.label);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setResolvingPlace(true);
+
+    try {
+      const details = await fetchPlaceDetails(result.placeId, sessionTokenRef.current);
+      sessionTokenRef.current = createPlacesSessionToken();
+
+      if (!details) {
+        return;
+      }
+
+      const next = { latitude: details.latitude, longitude: details.longitude };
+      setAddressLabel(details.address);
       setCoordinate(next);
-      await updateAddress(next);
-    },
-    [updateAddress],
-  );
+      setMapFocusToken((token) => token + 1);
+    } finally {
+      setResolvingPlace(false);
+    }
+  }, []);
 
   const handleConfirm = useCallback(async () => {
     if (!coordinate) {
@@ -143,12 +179,19 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
 
     setConfirming(true);
     try {
-      const address = await reverseGeocode(coordinate.latitude, coordinate.longitude);
+      const existingAddress =
+        addressLabel &&
+        addressLabel !== t.loadingLocation &&
+        addressLabel !== t.lookingUpAddress
+          ? addressLabel
+          : null;
+      const address =
+        existingAddress ?? (await reverseGeocode(coordinate.latitude, coordinate.longitude));
       onLocationPicked({ ...coordinate, address });
     } finally {
       setConfirming(false);
     }
-  }, [coordinate, onLocationPicked]);
+  }, [addressLabel, coordinate, onLocationPicked, t.loadingLocation, t.lookingUpAddress]);
 
   return (
     <View style={styles.container}>
@@ -162,8 +205,11 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
             value={query}
             onChangeText={handleQueryChange}
             onFocus={() => setShowSuggestions(query.trim().length > 0)}
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-          {query.length > 0 ? (
+          {resolvingPlace ? <ActivityIndicator size="small" color={colors.accent} /> : null}
+          {query.length > 0 && !resolvingPlace ? (
             <Pressable
               onPress={() => {
                 setQuery('');
@@ -180,7 +226,7 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
           <View style={styles.suggestions}>
             <FlatList
               data={suggestions}
-              keyExtractor={(item) => `${item.latitude}-${item.longitude}-${item.label}`}
+              keyExtractor={(item) => item.placeId}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <Pressable
@@ -188,9 +234,16 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
                   onPress={() => void handleSuggestionPress(item)}
                 >
                   <Ionicons name="location-outline" size={14} color={colors.accent} />
-                  <Text style={styles.suggestionText} numberOfLines={1}>
-                    {item.label}
-                  </Text>
+                  <View style={styles.suggestionTextWrap}>
+                    <Text style={styles.suggestionText} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                    {item.secondaryLabel ? (
+                      <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                        {item.secondaryLabel}
+                      </Text>
+                    ) : null}
+                  </View>
                 </Pressable>
               )}
             />
@@ -206,6 +259,7 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
             addressLabel={geocoding ? t.lookingUpAddress : addressLabel}
             onRefreshLocation={() => void handleRefreshLocation()}
             loading={mapLoading}
+            focusToken={mapFocusToken}
           />
         ) : (
           <View style={styles.mapPlaceholder}>
@@ -277,7 +331,7 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radii.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    maxHeight: 200,
+    maxHeight: 220,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -298,10 +352,18 @@ const useStyles = makeStyles((colors) => ({
   suggestionPressed: {
     backgroundColor: colors.slate50,
   },
-  suggestionText: {
+  suggestionTextWrap: {
     flex: 1,
+    gap: 2,
+  },
+  suggestionText: {
     fontSize: 14,
+    fontWeight: '500',
     color: colors.slate700,
+  },
+  suggestionSecondary: {
+    fontSize: 12,
+    color: colors.slate400,
   },
   mapArea: {
     flex: 1,

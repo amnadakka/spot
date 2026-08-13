@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { InteractionManager, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { configureAlarmAudioMode } from '../audio/configureAlarmAudio';
 import { useI18n } from '../i18n/I18nContext';
@@ -34,6 +35,7 @@ export default function GeofenceAlarmRingingLayer({
 }: GeofenceAlarmRingingLayerProps) {
   const { t, isRTL } = useI18n();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useStyles();
   const player = useAudioPlayer(require('../../assets/alarm.mp3'));
   const spotCount = alarm.spots.length;
@@ -79,73 +81,84 @@ export default function GeofenceAlarmRingingLayer({
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onDismiss}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="alarm" size={48} color={colors.accent} />
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: Math.max(insets.top, spacing.xxl),
+            paddingBottom: Math.max(insets.bottom, spacing.lg),
+          },
+          !isGrouped && styles.containerCentered,
+        ]}
+      >
+        <View style={[styles.content, !isGrouped && styles.contentCentered]}>
+          <View style={styles.header}>
+            <View style={styles.iconWrap}>
+              <Ionicons name="alarm" size={48} color={colors.accent} />
+            </View>
+            <Text style={styles.eyebrow}>{t.spotAlarmEyebrow}</Text>
+            <Text style={styles.title}>
+              {isGrouped
+                ? fill(t.nearSpotsTitle, { count: spotCount })
+                : (alarm.spots[0]?.title ?? t.spotAlarm)}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isGrouped ? t.nearSpotsSubtitle : (alarm.spots[0]?.subtitle ?? t.enteredSpotArea)}
+            </Text>
           </View>
-          <Text style={styles.eyebrow}>{t.spotAlarmEyebrow}</Text>
-          <Text style={styles.title}>
-            {isGrouped ? fill(t.nearSpotsTitle, { count: spotCount }) : alarm.spots[0]?.title ?? t.spotAlarm}
-          </Text>
-          <Text style={styles.subtitle}>
-            {isGrouped
-              ? t.nearSpotsSubtitle
-              : alarm.spots[0]?.subtitle ?? t.enteredSpotArea}
-          </Text>
-        </View>
 
-        {isGrouped ? (
-          <ScrollView style={styles.spotList} contentContainerStyle={styles.spotListContent}>
-            {alarm.spots.map((spot) => (
-              <Pressable
-                key={spot.regionId}
-                accessibilityRole="button"
-                accessibilityLabel={fill(t.viewSpotA11y, { title: spot.title })}
-                onPress={() => onViewSpot(spot.regionId)}
-                style={({ pressed }) => [styles.spotRow, pressed && styles.spotRowPressed]}
-              >
-                <View style={styles.spotRowIcon}>
-                  <Ionicons name="location" size={18} color={colors.accent} />
-                </View>
-                <View style={styles.spotRowText}>
-                  <Text style={styles.spotRowTitle} numberOfLines={1}>
-                    {spot.title}
-                  </Text>
-                  <Text style={styles.spotRowSubtitle} numberOfLines={2}>
-                    {spot.subtitle}
-                  </Text>
-                </View>
-                <Ionicons
-                  name={isRTL ? 'chevron-back' : 'chevron-forward'}
-                  size={18}
-                  color={colors.slate400}
-                />
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
-
-        <View style={styles.actions}>
-          {!isGrouped ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t.viewSpotDetailsA11y}
-              onPress={() => onViewSpot(alarm.spots[0].regionId)}
-              style={({ pressed }) => [styles.viewButton, pressed && styles.buttonPressed]}
-            >
-              <Text style={styles.viewLabel}>{t.viewSpot}</Text>
-            </Pressable>
+          {isGrouped ? (
+            <ScrollView style={styles.spotList} contentContainerStyle={styles.spotListContent}>
+              {alarm.spots.map((spot) => (
+                <Pressable
+                  key={spot.regionId}
+                  accessibilityRole="button"
+                  accessibilityLabel={fill(t.viewSpotA11y, { title: spot.title })}
+                  onPress={() => onViewSpot(spot.regionId)}
+                  style={({ pressed }) => [styles.spotRow, pressed && styles.spotRowPressed]}
+                >
+                  <View style={styles.spotRowIcon}>
+                    <Ionicons name="location" size={18} color={colors.accent} />
+                  </View>
+                  <View style={styles.spotRowText}>
+                    <Text style={styles.spotRowTitle} numberOfLines={1}>
+                      {spot.title}
+                    </Text>
+                    <Text style={styles.spotRowSubtitle} numberOfLines={2}>
+                      {spot.subtitle}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={isRTL ? 'chevron-back' : 'chevron-forward'}
+                    size={18}
+                    color={colors.slate400}
+                  />
+                </Pressable>
+              ))}
+            </ScrollView>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t.dismissAlarmA11y}
-            onPress={onDismiss}
-            style={({ pressed }) => [styles.dismissButton, pressed && styles.buttonPressed]}
-          >
-            <Text style={styles.dismissLabel}>{t.dismiss}</Text>
-          </Pressable>
+          <View style={styles.actions}>
+            {!isGrouped ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t.viewSpotDetailsA11y}
+                onPress={() => onViewSpot(alarm.spots[0].regionId)}
+                style={({ pressed }) => [styles.viewButton, pressed && styles.buttonPressed]}
+              >
+                <Text style={styles.viewLabel}>{t.viewSpot}</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t.dismissAlarmA11y}
+              onPress={onDismiss}
+              style={({ pressed }) => [styles.dismissButton, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.dismissLabel}>{t.dismiss}</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -157,13 +170,23 @@ const useStyles = makeStyles((colors) => ({
     flex: 1,
     backgroundColor: colors.background,
     paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.lg,
+  },
+  containerCentered: {
+    justifyContent: 'center',
+  },
+  content: {
+    flex: 1,
+    minHeight: 0,
+    gap: spacing.lg,
+  },
+  contentCentered: {
+    flexGrow: 0,
+    flexShrink: 1,
+    width: '100%',
   },
   header: {
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
   },
   iconWrap: {
     width: 96,
@@ -195,7 +218,6 @@ const useStyles = makeStyles((colors) => ({
   },
   spotList: {
     flex: 1,
-    marginBottom: spacing.lg,
   },
   spotListContent: {
     gap: spacing.sm,

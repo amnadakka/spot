@@ -40,6 +40,8 @@ type CenterPinMapPickerProps = {
   addressLabel: string;
   onRefreshLocation: () => void;
   loading?: boolean;
+  /** Increment to force the camera to follow an external coordinate (e.g. search). */
+  focusToken?: number;
 };
 
 export default function CenterPinMapPicker({
@@ -48,6 +50,7 @@ export default function CenterPinMapPicker({
   addressLabel,
   onRefreshLocation,
   loading = false,
+  focusToken = 0,
 }: CenterPinMapPickerProps) {
   const { t } = useI18n();
   const { colors } = useTheme();
@@ -59,6 +62,7 @@ export default function CenterPinMapPicker({
   const regionDeltaRef = useRef(DEFAULT_MAP_DELTA);
   const coordinateFromMapRef = useRef(false);
   const currentCenterRef = useRef<MapCoordinate | null>(null);
+  const lastFocusTokenRef = useRef(focusToken);
 
   const animateTo = useCallback((next: MapCoordinate, delta = regionDeltaRef.current) => {
     const region = regionForCoordinate(next, delta);
@@ -67,7 +71,22 @@ export default function CenterPinMapPicker({
   }, []);
 
   useEffect(() => {
-    if (!coordinate || !ready || isDragging.current) {
+    if (!coordinate || !ready) {
+      return;
+    }
+
+    const focusRequested = focusToken !== lastFocusTokenRef.current;
+    if (focusRequested) {
+      lastFocusTokenRef.current = focusToken;
+      isDragging.current = false;
+      coordinateFromMapRef.current = false;
+      animateTo(coordinate);
+      currentCenterRef.current = coordinate;
+      setCircleCenter(coordinate);
+      return;
+    }
+
+    if (isDragging.current) {
       return;
     }
     if (coordinateFromMapRef.current) {
@@ -77,7 +96,7 @@ export default function CenterPinMapPicker({
     animateTo(coordinate);
     currentCenterRef.current = coordinate;
     setCircleCenter(coordinate);
-  }, [animateTo, coordinate, ready]);
+  }, [animateTo, coordinate, focusToken, ready]);
 
   const handleRegionChange = useCallback((region: Region) => {
     isDragging.current = true;

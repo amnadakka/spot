@@ -10,6 +10,7 @@ import { radii, spacing } from '../theme/spacing';
 import type { Reminder } from '../types/reminder';
 
 import { SpotSelectionActionBar } from './SpotList';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 type TextScreenProps = {
   reminders: Reminder[];
@@ -48,6 +49,11 @@ export default function TextScreen({
   const styles = useStyles();
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const activeReminders = useMemo(
     () => reminders.filter((reminder) => reminder.enabled),
@@ -107,17 +113,15 @@ export default function TextScreen({
         ? t.deleteSpotConfirmOne
         : fill(t.deleteSpotsConfirmMany, { count: selectedCount });
 
-    Alert.alert(t.deleteSpotsTitle, message, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: () => {
-          onDeleteMany(ids);
-          exitSelection();
-        },
+    setDeleteConfirm({
+      title: t.deleteSpotsTitle,
+      message,
+      onConfirm: () => {
+        onDeleteMany(ids);
+        exitSelection();
+        setDeleteConfirm(null);
       },
-    ]);
+    });
   }, [exitSelection, onDeleteMany, selectedCount, selectedIds, t]);
 
   const handleBulkToggle = useCallback(() => {
@@ -284,6 +288,16 @@ export default function TextScreen({
           onDeleteSelected={handleDeleteSelected}
         />
       ) : null}
+
+      <ConfirmDialog
+        visible={deleteConfirm != null}
+        title={deleteConfirm?.title ?? ''}
+        message={deleteConfirm?.message ?? ''}
+        cancelLabel={t.cancel}
+        confirmLabel={t.delete}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm?.onConfirm()}
+      />
     </View>
   );
 }

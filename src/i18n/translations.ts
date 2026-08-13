@@ -4,6 +4,7 @@ export type AppTranslations = {
   // Common
   cancel: string;
   delete: string;
+  moreOptions: string;
   edit: string;
   save: string;
   discard: string;
@@ -220,6 +221,11 @@ export type AppTranslations = {
   spotFallback: string;
   alarmChannelName: string;
   alarmChannelDescription: string;
+  fullScreenAlarms: string;
+  fullScreenAlarmsSheetTitle: string;
+  fullScreenAlarmsSheetBody: string;
+  fullScreenIntentOptTitle: string;
+  fullScreenIntentOptBody: string;
 
   // Overlap / battery
   overlappingRangeTitle: string;
@@ -239,6 +245,7 @@ export type AppTranslations = {
 export const en: AppTranslations = {
   cancel: 'Cancel',
   delete: 'Delete',
+  moreOptions: 'More options',
   edit: 'Edit',
   save: 'Save',
   discard: 'Discard',
@@ -452,6 +459,13 @@ export const en: AppTranslations = {
   spotFallback: 'Spot',
   alarmChannelName: 'Spot alarms',
   alarmChannelDescription: 'Ringtone-style reminders when you enter a saved spot area.',
+  fullScreenAlarms: 'Full-screen alarms',
+  fullScreenAlarmsSheetTitle: 'Full-screen alarms',
+  fullScreenAlarmsSheetBody:
+    'Allow Spot to show Dismiss and View spot over the lock screen, like a clock alarm.\n\nOn Android 14+, open Settings and turn on full-screen notifications for Spot.',
+  fullScreenIntentOptTitle: 'Show alarms on the lock screen',
+  fullScreenIntentOptBody:
+    'Spot needs full-screen notification access to show Dismiss and View spot when your phone is locked.\n\nThis is the same permission clock apps use.',
 
   overlappingRangeTitle: 'Overlapping range',
   overlappingRangeBody:
@@ -471,6 +485,7 @@ export const en: AppTranslations = {
 export const de: AppTranslations = {
   cancel: 'Abbrechen',
   delete: 'Löschen',
+  moreOptions: 'Mehr Optionen',
   edit: 'Bearbeiten',
   save: 'Speichern',
   discard: 'Verwerfen',
@@ -692,6 +707,13 @@ export const de: AppTranslations = {
   alarmChannelName: 'Spot-Alarme',
   alarmChannelDescription:
     'Klingelton-Erinnerungen, wenn du einen gespeicherten Spot-Bereich betrittst.',
+  fullScreenAlarms: 'Vollbild-Alarme',
+  fullScreenAlarmsSheetTitle: 'Vollbild-Alarme',
+  fullScreenAlarmsSheetBody:
+    'Erlaube Spot, „Schließen“ und „Spot anzeigen“ über dem Sperrbildschirm zu zeigen — wie ein Wecker.\n\nUnter Android 14+ öffne die Einstellungen und aktiviere Vollbildbenachrichtigungen für Spot.',
+  fullScreenIntentOptTitle: 'Alarme auf dem Sperrbildschirm zeigen',
+  fullScreenIntentOptBody:
+    'Spot braucht Zugriff auf Vollbildbenachrichtigungen, um „Schließen“ und „Spot anzeigen“ zu zeigen, wenn das Telefon gesperrt ist.\n\nDas ist dieselbe Berechtigung, die Wecker-Apps verwenden.',
 
   overlappingRangeTitle: 'Überlappender Bereich',
   overlappingRangeBody:
@@ -711,6 +733,7 @@ export const de: AppTranslations = {
 export const ar: AppTranslations = {
   cancel: 'إلغاء',
   delete: 'حذف',
+  moreOptions: 'المزيد من الخيارات',
   edit: 'تعديل',
   save: 'حفظ',
   discard: 'تجاهل',
@@ -922,6 +945,13 @@ export const ar: AppTranslations = {
   spotFallback: 'مكان',
   alarmChannelName: 'تنبيهات الأماكن',
   alarmChannelDescription: 'تذكيرات بنغمة رنين عند دخولك منطقة مكان محفوظ.',
+  fullScreenAlarms: 'تنبيهات ملء الشاشة',
+  fullScreenAlarmsSheetTitle: 'تنبيهات ملء الشاشة',
+  fullScreenAlarmsSheetBody:
+    'اسمح لـ Spot بإظهار إغلاق وعرض المكان فوق شاشة القفل، مثل المنبّه.\n\nعلى أندرويد 14 فما فوق، افتح الإعدادات وفعّل إشعارات ملء الشاشة لتطبيق Spot.',
+  fullScreenIntentOptTitle: 'إظهار التنبيهات على شاشة القفل',
+  fullScreenIntentOptBody:
+    'يحتاج Spot إلى إذن إشعارات ملء الشاشة لإظهار إغلاق وعرض المكان عندما يكون الهاتف مقفلاً.\n\nهذا نفس الإذن الذي تستخدمه تطبيقات المنبّه.',
 
   overlappingRangeTitle: 'نطاق متداخل',
   overlappingRangeBody:

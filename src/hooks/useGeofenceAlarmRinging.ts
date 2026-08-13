@@ -14,6 +14,10 @@ import {
   loadVisitBatch,
 } from '../storage/geofenceVisitBatch';
 import {
+  consumeViewRegionId,
+  wasAlarmDismissedNatively,
+} from '../services/spotAlarmNative';
+import {
   clearPendingGeofenceAlarm,
   getPendingGeofenceAlarmSync,
   loadPendingGeofenceAlarm,
@@ -100,6 +104,10 @@ export function useGeofenceAlarmRinging(
   onViewSpotRef.current = onViewSpot;
 
   const startAlarm = useCallback((alarm: ActiveGeofenceAlarm) => {
+    if (wasAlarmDismissedNatively(alarm.startedAt)) {
+      return;
+    }
+
     setActiveAlarm(alarm);
   }, []);
 
@@ -218,11 +226,16 @@ export function useGeofenceAlarmRinging(
     }
 
     const interval = setInterval(() => {
+      if (wasAlarmDismissedNatively(activeAlarm.startedAt)) {
+        dismissActiveAlarm();
+        return;
+      }
+
       refreshActiveAlarmFromBatch();
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [activeAlarm, refreshActiveAlarmFromBatch]);
+  }, [activeAlarm, dismissActiveAlarm, refreshActiveAlarmFromBatch]);
 
   useEffect(() => {
     if (isExpoGoAndroid()) {
@@ -232,7 +245,7 @@ export function useGeofenceAlarmRinging(
     let cancelled = false;
 
     async function restoreAlarmFromForeground(): Promise<void> {
-      if (cancelled || activeAlarmRef.current) {
+      if (cancelled) {
         return;
       }
 
@@ -242,17 +255,37 @@ export function useGeofenceAlarmRinging(
         loadPendingGeofenceAlarm(),
       ]);
 
-      if (cancelled || activeAlarmRef.current) {
+      if (cancelled) {
         return;
       }
 
+      const viewRegionId = consumeViewRegionId();
       const pending = getPendingGeofenceAlarmSync();
+      const batch = getActiveVisitBatchSync();
+      const startedAt =
+        pending?.startedAt ?? batch?.startedAt ?? activeAlarmRef.current?.startedAt ?? 0;
+
+      if (viewRegionId) {
+        dismissActiveAlarm();
+        const triggeredAt = new Date(startedAt || Date.now()).toISOString();
+        onViewSpotRef.current(viewRegionId, { triggeredAt });
+        return;
+      }
+
+      if (startedAt && wasAlarmDismissedNatively(startedAt)) {
+        dismissActiveAlarm();
+        return;
+      }
+
+      if (activeAlarmRef.current) {
+        return;
+      }
+
       if (pending) {
         startAlarm(resolveAlarmFromRegionIds(pending.regionIds, pending.startedAt));
         return;
       }
 
-      const batch = getActiveVisitBatchSync();
       if (batch) {
         startAlarm(resolveAlarmFromRegionIds(batch.regionIds, batch.startedAt));
         return;
@@ -299,7 +332,7 @@ export function useGeofenceAlarmRinging(
       cancelled = true;
       subscription.remove();
     };
-  }, [startAlarm]);
+  }, [dismissActiveAlarm, startAlarm]);
 
   return {
     activeAlarm,

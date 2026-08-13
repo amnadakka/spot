@@ -4,7 +4,12 @@ import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
 import { fill, getT } from '../i18n/translations';
 import { getGeofenceReminderMetadataSync } from '../storage/geofenceReminderTitles';
 
-import { GEOFENCE_ALARM_CHANNEL_ID, SPOT_ALARM_SOUND } from './constants';
+import { ensureGeofenceAlarmCategory } from './alarmCategory';
+import {
+  GEOFENCE_ALARM_CATEGORY_ID,
+  GEOFENCE_ALARM_CHANNEL_ID,
+  SPOT_ALARM_SOUND,
+} from './constants';
 
 function buildAlarmContent(regionIds: string[], _batchStartedAt: number): {
   title: string;
@@ -48,7 +53,9 @@ export async function fireGeofenceAlarmImmediate(
   }
 
   const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+  await ensureGeofenceAlarmCategory();
   const primaryRegionId = regionIds[0];
+  const t = getT();
   const { title, body } = buildAlarmContent(regionIds, batchStartedAt);
 
   await Notifications.scheduleNotificationAsync({
@@ -60,12 +67,20 @@ export async function fireGeofenceAlarmImmediate(
       sticky: true,
       autoDismiss: false,
       vibrate: [0, 500, 200, 500, 200, 500],
-      ...(Platform.OS === 'ios' ? { interruptionLevel: 'timeSensitive' as const } : {}),
+      ...(Platform.OS === 'ios'
+        ? {
+            interruptionLevel: 'timeSensitive' as const,
+            categoryIdentifier: GEOFENCE_ALARM_CATEGORY_ID,
+          }
+        : {}),
       data: {
         type: 'geofence_enter',
         regionId: primaryRegionId,
         regionIds,
         batchStartedAt,
+        eyebrow: t.spotAlarmEyebrow,
+        dismissLabel: t.dismiss,
+        viewSpotLabel: t.viewSpot,
       },
     },
     trigger:

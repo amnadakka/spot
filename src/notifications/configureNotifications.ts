@@ -1,5 +1,6 @@
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
 
+import { ensureGeofenceAlarmCategory } from './alarmCategory';
 import { ensureGeofenceAndroidChannel } from './notificationChannels';
 
 /**
@@ -45,7 +46,7 @@ export async function ensureNotificationsReady(): Promise<void> {
     return;
   }
 
-  await ensureGeofenceAndroidChannel();
+  await Promise.all([ensureGeofenceAndroidChannel(), ensureGeofenceAlarmCategory()]);
 }
 
 /** Call once when the UI mounts: Android channel + OS notification permission prompt. */

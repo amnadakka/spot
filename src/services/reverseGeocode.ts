@@ -25,23 +25,3 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
 
   return formatCoordinateLabel(latitude, longitude);
 }
-
-export async function forwardGeocode(query: string): Promise<
-  Array<{ latitude: number; longitude: number; label: string }>
-> {
-  const trimmed = query.trim();
-  if (!trimmed) {
-    return [];
-  }
-
-  try {
-    const results = await Location.geocodeAsync(trimmed);
-    return results.slice(0, 5).map((result, index) => ({
-      latitude: result.latitude,
-      longitude: result.longitude,
-      label: trimmed + (results.length > 1 ? ` (${index + 1})` : ''),
-    }));
-  } catch {
-    return [];
-  }
-}

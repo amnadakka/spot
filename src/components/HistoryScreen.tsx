@@ -2,59 +2,46 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useI18n } from '../i18n/I18nContext';
-import { fill, localeTag, type AppLanguage } from '../i18n/translations';
 import { loadHistory } from '../storage/history';
 import { makeStyles } from '../theme/makeStyles';
 import { useTheme } from '../theme/ThemeContext';
 import { radii, spacing } from '../theme/spacing';
 import type { HistoryEvent } from '../types/history';
+import { timeAgo } from '../utils/timeAgo';
 
-import { SpotSelectionActionBar } from './SpotList';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 type HistoryScreenProps = {
   refreshKey?: number;
   onEventPress?: (event: HistoryEvent) => void;
   onDeleteEvent?: (eventId: string) => void;
+  /** @deprecated Bulk delete UI removed; kept for call-site compatibility. */
   onDeleteEvents?: (eventIds: string[]) => void;
 };
-
-function formatHistoryDate(isoDate: string, language: AppLanguage): string {
-  return new Date(isoDate).toLocaleDateString(localeTag(language), {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
-
-function formatHistoryTime(isoDate: string, language: AppLanguage): string {
-  return new Date(isoDate).toLocaleTimeString(localeTag(language), {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 export default function HistoryScreen({
   refreshKey = 0,
   onEventPress,
   onDeleteEvent,
-  onDeleteEvents,
 }: HistoryScreenProps) {
   const { t, language } = useI18n();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useStyles();
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selecting, setSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [menuEvent, setMenuEvent] = useState<HistoryEvent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<HistoryEvent | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,68 +59,34 @@ export default function HistoryScreen({
     };
   }, [refreshKey]);
 
-  const selectedCount = selectedIds.size;
-  const allSelected =
-    events.length > 0 && events.every((event) => selectedIds.has(event.id));
+  const closeMenu = useCallback(() => setMenuEvent(null), []);
 
-  const exitSelection = useCallback(() => {
-    setSelecting(false);
-    setSelectedIds(new Set());
-  }, []);
-
-  const enterSelection = useCallback((id: string) => {
-    setSelecting(true);
-    setSelectedIds(new Set([id]));
-  }, []);
-
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleSelectAllPress = useCallback(() => {
-    if (allSelected) {
-      setSelectedIds(new Set());
+  const handleOpenFromMenu = useCallback(() => {
+    if (!menuEvent) {
       return;
     }
-    setSelectedIds(new Set(events.map((event) => event.id)));
-  }, [allSelected, events]);
+    const event = menuEvent;
+    setMenuEvent(null);
+    onEventPress?.(event);
+  }, [menuEvent, onEventPress]);
 
-  const handleDeleteSelected = useCallback(() => {
-    if (selectedCount === 0) {
+  const handleDeleteFromMenu = useCallback(() => {
+    if (!menuEvent) {
       return;
     }
+    setDeleteTarget(menuEvent);
+    setMenuEvent(null);
+  }, [menuEvent]);
 
-    const ids = [...selectedIds];
-    const message =
-      selectedCount === 1
-        ? t.deleteHistoryConfirmOne
-        : fill(t.deleteHistoryConfirmMany, { count: selectedCount });
-
-    Alert.alert(t.deleteHistoryTitle, message, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: () => {
-          setEvents((prev) => prev.filter((event) => !selectedIds.has(event.id)));
-          if (onDeleteEvents) {
-            onDeleteEvents(ids);
-          } else {
-            ids.forEach((id) => onDeleteEvent?.(id));
-          }
-          exitSelection();
-        },
-      },
-    ]);
-  }, [exitSelection, onDeleteEvent, onDeleteEvents, selectedCount, selectedIds, t]);
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) {
+      return;
+    }
+    const id = deleteTarget.id;
+    setEvents((prev) => prev.filter((event) => event.id !== id));
+    onDeleteEvent?.(id);
+    setDeleteTarget(null);
+  }, [deleteTarget, onDeleteEvent]);
 
   if (loading) {
     return (
@@ -157,119 +110,127 @@ export default function HistoryScreen({
 
   return (
     <View style={styles.container}>
-      {selecting ? (
-        <View style={styles.selectionHeader}>
-          <Pressable
-            style={({ pressed }) => [styles.selectAllBtn, pressed && styles.pressedSoft]}
-            onPress={handleSelectAllPress}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: allSelected }}
-            accessibilityLabel={allSelected ? t.deselectAll : t.selectAll}
-          >
-            <View style={[styles.selectAllCircle, allSelected && styles.selectAllCircleSelected]}>
-              {allSelected ? (
-                <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
-              ) : null}
-            </View>
-            <Text style={styles.selectAllLabel}>{t.selectAllShort}</Text>
-          </Pressable>
+      <FlatList
+        style={styles.list}
+        data={events}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item, index }) => {
+          const isLast = index === events.length - 1;
+          const address = item.address?.trim();
 
-          <Text style={styles.selectionCount}>
-            {fill(t.selectedCount, { count: selectedCount })}
-          </Text>
-
-          <Pressable
-            style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressedSoft]}
-            onPress={exitSelection}
-          >
-            <Text style={styles.cancelLabel}>{t.cancel}</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      <View style={styles.card}>
-        <FlatList
-          style={styles.list}
-          data={events}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.listContent,
-            selecting && styles.listContentWithActionBar,
-          ]}
-          showsVerticalScrollIndicator={false}
-          extraData={{ selecting, selectedIds }}
-          renderItem={({ item, index }) => {
-            const isSelected = selectedIds.has(item.id);
-            const isLast = index === events.length - 1;
-            const zebra = index % 2 === 1;
-
-            return (
-              <View>
+          return (
+            <View>
+              <View style={styles.row}>
                 <Pressable
-                  style={[
-                    styles.row,
-                    zebra && styles.rowZebra,
-                    selecting && isSelected && styles.rowSelected,
-                  ]}
-                  onPress={() => {
-                    if (selecting) {
-                      toggleSelection(item.id);
-                      return;
-                    }
-                    onEventPress?.(item);
-                  }}
-                  onLongPress={() => {
-                    if (!selecting) {
-                      enterSelection(item.id);
-                    }
-                  }}
-                  delayLongPress={350}
+                  style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
+                  onPress={() => onEventPress?.(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.spotTitle}
                 >
-                  {selecting ? (
-                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                      {isSelected ? (
-                        <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
-                      ) : null}
-                    </View>
-                  ) : null}
-
-                  <View style={styles.info}>
-                    <Text
-                      style={[styles.date, selecting && isSelected && styles.dateSelected]}
-                      numberOfLines={1}
-                    >
-                      {formatHistoryDate(item.triggeredAt, language)}
-                    </Text>
-                    <Text
-                      style={[styles.title, selecting && isSelected && styles.titleSelected]}
-                      numberOfLines={1}
-                    >
-                      {item.spotTitle}
-                    </Text>
+                  <View style={styles.iconWrap}>
+                    <Ionicons name="location" size={18} color={colors.accent} />
                   </View>
 
-                  <Text
-                    style={[styles.time, selecting && isSelected && styles.timeSelected]}
-                    numberOfLines={1}
-                  >
-                    {formatHistoryTime(item.triggeredAt, language)}
-                  </Text>
+                  <View style={styles.info}>
+                    <Text style={styles.title} numberOfLines={1}>
+                      {item.spotTitle}
+                    </Text>
+                    {address ? (
+                      <Text style={styles.address} numberOfLines={1}>
+                        {address}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {timeAgo(item.triggeredAt, language)}
+                    </Text>
+                  </View>
                 </Pressable>
 
-                {!isLast ? <View style={styles.divider} /> : null}
+                <Pressable
+                  style={({ pressed }) => [styles.menuBtn, pressed && styles.menuBtnPressed]}
+                  onPress={() => setMenuEvent(item)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.moreOptions}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={20} color={colors.slate500} />
+                </Pressable>
               </View>
-            );
-          }}
-        />
-      </View>
 
-      {selecting ? (
-        <SpotSelectionActionBar
-          selectedCount={selectedCount}
-          onDeleteSelected={handleDeleteSelected}
-          showBulkToggle={false}
-        />
-      ) : null}
+              {!isLast ? <View style={styles.divider} /> : null}
+            </View>
+          );
+        }}
+      />
+
+      <Modal
+        visible={menuEvent != null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <View style={styles.menuRoot}>
+          <Pressable
+            style={styles.menuBackdrop}
+            onPress={closeMenu}
+            accessibilityRole="button"
+            accessibilityLabel={t.cancel}
+          />
+          <View style={[styles.menuSheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+            <View style={styles.menuHandle} />
+            {menuEvent ? (
+              <Text style={styles.menuTitle} numberOfLines={1}>
+                {menuEvent.spotTitle}
+              </Text>
+            ) : null}
+
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && styles.menuActionPressed]}
+              onPress={handleOpenFromMenu}
+              accessibilityRole="button"
+              accessibilityLabel={t.viewSpot}
+            >
+              <Ionicons name="open-outline" size={20} color={colors.slate800} />
+              <Text style={styles.menuActionLabel}>{t.viewSpot}</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && styles.menuActionPressed]}
+              onPress={handleDeleteFromMenu}
+              accessibilityRole="button"
+              accessibilityLabel={t.deleteHistoryEntryA11y}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+              <Text style={[styles.menuActionLabel, styles.menuActionDestructive]}>{t.delete}</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuAction,
+                styles.menuCancel,
+                pressed && styles.menuActionPressed,
+              ]}
+              onPress={closeMenu}
+              accessibilityRole="button"
+              accessibilityLabel={t.cancel}
+            >
+              <Text style={styles.menuCancelLabel}>{t.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <ConfirmDialog
+        visible={deleteTarget != null}
+        title={t.deleteHistoryTitle}
+        message={t.deleteHistoryConfirmOne}
+        cancelLabel={t.cancel}
+        confirmLabel={t.delete}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </View>
   );
 }
@@ -277,6 +238,7 @@ export default function HistoryScreen({
 const useStyles = makeStyles((colors) => ({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   loading: {
     flex: 1,
@@ -308,147 +270,132 @@ const useStyles = makeStyles((colors) => ({
     color: colors.slate400,
     textAlign: 'center',
   },
-  selectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    minHeight: 52,
-  },
-  selectAllBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minWidth: 48,
-    paddingVertical: spacing.xs,
-  },
-  selectAllCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.slate300,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  selectAllCircleSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  selectAllLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.slate500,
-  },
-  selectionCount: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.slate900,
-    letterSpacing: -0.3,
-  },
-  cancelBtn: {
-    minWidth: 48,
-    alignItems: 'flex-end',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-  },
-  cancelLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.slate800,
-  },
-  card: {
-    flex: 1,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radii.xxl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
   list: {
     flex: 1,
+    backgroundColor: colors.surface,
   },
   listContent: {
     flexGrow: 1,
-  },
-  listContentWithActionBar: {
-    paddingBottom: 120,
+    paddingBottom: spacing.lg,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
     backgroundColor: colors.surface,
   },
-  rowZebra: {
-    backgroundColor: colors.slate50,
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    minWidth: 0,
   },
-  rowSelected: {
+  rowPressed: {
+    opacity: 0.85,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.primaryLight,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderStrong,
-    marginHorizontal: spacing.lg,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.slate300,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  checkboxSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
   },
   info: {
     flex: 1,
     minWidth: 0,
     gap: 2,
   },
-  date: {
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.foreground,
+  },
+  address: {
+    fontSize: 13,
+    color: colors.mutedForeground,
+  },
+  meta: {
+    fontSize: 12,
+    color: colors.slate400,
+    marginTop: 1,
+  },
+  menuBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBtnPressed: {
+    backgroundColor: colors.slate100,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderStrong,
+    marginStart: spacing.lg + 40 + spacing.md,
+  },
+  menuRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  menuSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.xs,
+  },
+  menuHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.slate300,
+    marginBottom: spacing.sm,
+  },
+  menuTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.accent,
-  },
-  dateSelected: {
     color: colors.slate500,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
   },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.slate600,
+  menuAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.md,
   },
-  titleSelected: {
-    color: colors.slate400,
+  menuActionPressed: {
+    backgroundColor: colors.slate50,
   },
-  time: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.slate900,
-    marginStart: spacing.sm,
+  menuActionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.slate800,
   },
-  timeSelected: {
+  menuActionDestructive: {
+    color: colors.destructive,
+  },
+  menuCancel: {
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+  },
+  menuCancelLabel: {
+    fontSize: 16,
+    fontWeight: '600',
     color: colors.slate500,
-  },
-  pressedSoft: {
-    opacity: 0.7,
+    textAlign: 'center',
+    width: '100%',
   },
 }));

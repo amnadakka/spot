@@ -8,9 +8,11 @@ import { radii, spacing } from '../theme/spacing';
 
 type EmptyStateProps = {
   onCreateFirst: () => void;
+  /** When false, omit the primary CTA (e.g. mid sheet snap where it would clip). */
+  showCta?: boolean;
 };
 
-export default function EmptyState({ onCreateFirst }: EmptyStateProps) {
+export default function EmptyState({ onCreateFirst, showCta = true }: EmptyStateProps) {
   const { t } = useI18n();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -31,23 +33,25 @@ export default function EmptyState({ onCreateFirst }: EmptyStateProps) {
         <Text style={styles.subtitle}>{t.emptySubtitle}</Text>
       </View>
 
-      <Pressable
-        style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
-        onPress={onCreateFirst}
-      >
-        <Text style={styles.ctaLabel}>{t.emptyCta}</Text>
-      </Pressable>
+      {showCta ? (
+        <Pressable
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+          onPress={onCreateFirst}
+        >
+          <Text style={styles.ctaLabel}>{t.emptyCta}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
   container: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxl,
-    paddingBottom: spacing.xxl,
+    paddingVertical: spacing.lg,
     gap: spacing.xxl,
   },
   iconCluster: {

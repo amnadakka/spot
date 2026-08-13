@@ -71,7 +71,7 @@ function NavItem({
 
   return (
     <Pressable style={styles.item} onPress={onPress}>
-      <Ionicons name={icon} size={22} color={active ? colors.accent : colors.slate400} />
+      <Ionicons name={icon} size={22} color={active ? colors.accent : colors.slate500} />
       <Text style={[styles.label, active ? styles.labelActive : styles.labelInactive]}>
         {label.toUpperCase()}
       </Text>
@@ -83,11 +83,16 @@ const useStyles = makeStyles((colors) => ({
   container: {
     flexDirection: 'row',
     minHeight: 72,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primaryLight,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderStrong,
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
   },
   item: {
     flex: 1,
@@ -105,6 +110,6 @@ const useStyles = makeStyles((colors) => ({
     color: colors.accent,
   },
   labelInactive: {
-    color: colors.slate400,
+    color: colors.slate500,
   },
 }));

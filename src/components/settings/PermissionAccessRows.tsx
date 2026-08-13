@@ -1,19 +1,22 @@
 import { useState } from 'react';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import { useI18n } from '../../i18n/I18nContext';
 import {
+  type FullScreenIntentStatus,
   type LocationPermissionStatus,
   type NotificationPermissionStatus,
 } from '../../hooks/usePermissionStatuses';
 import { requestNotificationPermissionsAsync } from '../../notifications/configureNotifications';
 import { requestForegroundThenBackgroundPermissions } from '../../services/locationPermissions';
+import { openFullScreenIntentSettings } from '../../services/spotAlarmNative';
 import InfoBottomSheet from './InfoBottomSheet';
 import SettingsRow from './SettingsRow';
 
 type PermissionAccessRowsProps = {
   notifications: NotificationPermissionStatus;
   location: LocationPermissionStatus;
+  fullScreenIntent: FullScreenIntentStatus;
   onChanged: () => void;
   locationIsLast?: boolean;
 };
@@ -44,16 +47,19 @@ export function locationStatusLabel(
 export default function PermissionAccessRows({
   notifications,
   location,
+  fullScreenIntent,
   onChanged,
   locationIsLast = true,
 }: PermissionAccessRowsProps) {
   const { t } = useI18n();
-  const [sheet, setSheet] = useState<'notifications' | 'location' | null>(null);
+  const [sheet, setSheet] = useState<'notifications' | 'location' | 'fullScreen' | null>(null);
 
   const notificationsGranted = notifications === 'granted';
   const locationGranted = location === 'always' || location === 'while_in_use';
   const notificationsNeedsSettings = notifications === 'denied';
   const locationNeedsSettings = location === 'denied';
+  const showFullScreenRow = Platform.OS === 'android' && fullScreenIntent !== 'unsupported';
+  const fullScreenGranted = fullScreenIntent === 'granted';
 
   async function handleEnableNotifications() {
     if (notificationsNeedsSettings) {
@@ -89,6 +95,16 @@ export default function PermissionAccessRows({
         value={notificationStatusLabel(notifications, t)}
         onPress={() => setSheet('notifications')}
       />
+      {showFullScreenRow ? (
+        <SettingsRow
+          icon="phone-portrait"
+          iconColor="#F59E0B"
+          iconBackground="#FEF3C7"
+          label={t.fullScreenAlarms}
+          value={fullScreenGranted ? t.statusEnabled : t.statusDisabled}
+          onPress={() => setSheet('fullScreen')}
+        />
+      ) : null}
       <SettingsRow
         icon="location"
         iconColor="#3B82F6"
@@ -134,6 +150,25 @@ export default function PermissionAccessRows({
             return;
           }
           void handleEnableLocation();
+        }}
+        secondaryLabel={t.close}
+        onSecondaryPress={() => setSheet(null)}
+      />
+
+      <InfoBottomSheet
+        visible={sheet === 'fullScreen'}
+        onClose={() => setSheet(null)}
+        icon="phone-portrait"
+        iconColor="#F59E0B"
+        iconBackground="#FEF3C7"
+        title={t.fullScreenAlarmsSheetTitle}
+        body={t.fullScreenAlarmsSheetBody}
+        primaryLabel={t.openSettings}
+        onPrimaryPress={() => {
+          void openFullScreenIntentSettings().finally(() => {
+            onChanged();
+            setSheet(null);
+          });
         }}
         secondaryLabel={t.close}
         onSecondaryPress={() => setSheet(null)}

@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -30,6 +29,7 @@ import {
 } from '../utils/reminderSchedule';
 
 import ReminderScheduleFields from './ReminderScheduleFields';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 type SpotDetailScreenProps = {
   reminder: Reminder;
@@ -63,6 +63,7 @@ export default function SpotDetailScreen({
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(reminder.description ?? '');
   const [schedule, setSchedule] = useState<ReminderSchedule>(reminder.schedule ?? {});
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   useEffect(() => {
     setDescription(reminder.description ?? '');
@@ -123,17 +124,11 @@ export default function SpotDetailScreen({
     if (!onDelete) {
       return;
     }
-    Alert.alert(t.deleteSpotsTitle, t.deleteSpotConfirmOne, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: () => onDelete(reminder.id),
-      },
-    ]);
+    setDeleteConfirmVisible(true);
   };
 
   return (
+    <>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <View style={styles.mapContainer}>
         <MapView
@@ -389,6 +384,20 @@ export default function SpotDetailScreen({
         <Text style={styles.openMapsLabel}>{t.openInMaps}</Text>
       </Pressable>
     </ScrollView>
+
+    <ConfirmDialog
+      visible={deleteConfirmVisible}
+      title={t.deleteSpotsTitle}
+      message={t.deleteSpotConfirmOne}
+      cancelLabel={t.cancel}
+      confirmLabel={t.delete}
+      onCancel={() => setDeleteConfirmVisible(false)}
+      onConfirm={() => {
+        setDeleteConfirmVisible(false);
+        onDelete?.(reminder.id);
+      }}
+    />
+    </>
   );
 }
 
