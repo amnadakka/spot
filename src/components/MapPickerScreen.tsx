@@ -51,6 +51,8 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
   const sessionTokenRef = useRef(createPlacesSessionToken());
   const searchRequestIdRef = useRef(0);
   const coordinateRef = useRef<MapCoordinate | null>(null);
+  const [suggestionsMaxHeight, setSuggestionsMaxHeight] = useState(280);
+  const suggestionsOpen = showSuggestions && suggestions.length > 0;
 
   useEffect(() => {
     coordinateRef.current = coordinate;
@@ -221,34 +223,6 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
             </Pressable>
           ) : null}
         </View>
-
-        {showSuggestions && suggestions.length > 0 ? (
-          <View style={styles.suggestions}>
-            <FlatList
-              data={suggestions}
-              keyExtractor={(item) => item.placeId}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => [styles.suggestionRow, pressed && styles.suggestionPressed]}
-                  onPress={() => void handleSuggestionPress(item)}
-                >
-                  <Ionicons name="location-outline" size={14} color={colors.accent} />
-                  <View style={styles.suggestionTextWrap}>
-                    <Text style={styles.suggestionText} numberOfLines={1}>
-                      {item.label}
-                    </Text>
-                    {item.secondaryLabel ? (
-                      <Text style={styles.suggestionSecondary} numberOfLines={1}>
-                        {item.secondaryLabel}
-                      </Text>
-                    ) : null}
-                  </View>
-                </Pressable>
-              )}
-            />
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.mapArea}>
@@ -266,6 +240,51 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
             <ActivityIndicator color={colors.accent} size="large" />
           </View>
         )}
+
+        {suggestionsOpen ? (
+          <View
+            style={styles.suggestionsOverlay}
+            onLayout={(event) => {
+              const nextHeight = Math.floor(event.nativeEvent.layout.height);
+              if (nextHeight > 0 && nextHeight !== suggestionsMaxHeight) {
+                setSuggestionsMaxHeight(nextHeight);
+              }
+            }}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setShowSuggestions(false)}
+            />
+            <View style={styles.suggestions}>
+              <FlatList
+                data={suggestions}
+                keyExtractor={(item) => item.placeId}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                nestedScrollEnabled
+                style={[styles.suggestionsList, { maxHeight: suggestionsMaxHeight }]}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={({ pressed }) => [styles.suggestionRow, pressed && styles.suggestionPressed]}
+                    onPress={() => void handleSuggestionPress(item)}
+                  >
+                    <Ionicons name="location-outline" size={14} color={colors.accent} />
+                    <View style={styles.suggestionTextWrap}>
+                      <Text style={styles.suggestionText} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                      {item.secondaryLabel ? (
+                        <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                          {item.secondaryLabel}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                )}
+              />
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -321,24 +340,25 @@ const useStyles = makeStyles((colors) => ({
     color: colors.slate700,
     padding: 0,
   },
+  suggestionsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    elevation: 12,
+  },
   suggestions: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    top: '100%',
-    marginTop: 4,
     backgroundColor: colors.surface,
     borderRadius: radii.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    maxHeight: 220,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 8,
-    zIndex: 20,
+  },
+  suggestionsList: {
+    flexGrow: 0,
   },
   suggestionRow: {
     flexDirection: 'row',
@@ -368,6 +388,7 @@ const useStyles = makeStyles((colors) => ({
   mapArea: {
     flex: 1,
     marginHorizontal: spacing.lg,
+    zIndex: 1,
   },
   mapPlaceholder: {
     flex: 1,
