@@ -5,7 +5,7 @@ import { isInsideRadius, type Coordinate } from '../utils/geo';
 import { hasScheduleTiming, isScheduleActiveNow } from '../utils/reminderSchedule';
 
 /** Re-evaluate schedule windows once per minute so occupied highlighting stays accurate. */
-function useScheduleMinuteTick(reminders: Reminder[]): number {
+export function useScheduleMinuteTick(reminders: Reminder[]): number {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / 60_000));
 
   const hasScheduledSpots = useMemo(

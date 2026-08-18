@@ -11,32 +11,47 @@ import {
   SPOT_ALARM_SOUND,
 } from './constants';
 
-function buildAlarmContent(regionIds: string[], _batchStartedAt: number): {
+export function buildGeofenceAlarmContent(
+  regionIds: string[],
+  batchStartedAt: number,
+): {
   title: string;
   body: string;
+  data: Record<string, unknown>;
 } {
   const t = getT();
+  let title: string;
+  let body: string;
 
   if (regionIds.length === 1) {
     const metadata = getGeofenceReminderMetadataSync(regionIds[0]);
-    return {
-      title: metadata?.title ?? t.spotAlarm,
-      body: metadata?.address ?? t.enteredSpotArea,
-    };
+    title = metadata?.title ?? t.spotAlarm;
+    body = metadata?.address ?? t.enteredSpotArea;
+  } else {
+    const titles = regionIds
+      .map((id) => getGeofenceReminderMetadataSync(id)?.title ?? t.spotFallback)
+      .slice(0, 3);
+    const extra = regionIds.length - titles.length;
+    const list =
+      extra > 0
+        ? fill(t.nearbySpotsMore, { list: titles.join(', '), extra })
+        : titles.join(', ');
+    title = fill(t.nearbySpotsNotificationTitle, { count: regionIds.length });
+    body = list;
   }
 
-  const titles = regionIds
-    .map((id) => getGeofenceReminderMetadataSync(id)?.title ?? t.spotFallback)
-    .slice(0, 3);
-  const extra = regionIds.length - titles.length;
-  const list =
-    extra > 0
-      ? fill(t.nearbySpotsMore, { list: titles.join(', '), extra })
-      : titles.join(', ');
-
   return {
-    title: fill(t.nearbySpotsNotificationTitle, { count: regionIds.length }),
-    body: list,
+    title,
+    body,
+    data: {
+      type: 'geofence_enter',
+      regionId: regionIds[0],
+      regionIds,
+      batchStartedAt,
+      eyebrow: t.spotAlarmEyebrow,
+      dismissLabel: t.dismiss,
+      viewSpotLabel: t.viewSpot,
+    },
   };
 }
 
@@ -52,11 +67,12 @@ export async function fireGeofenceAlarmImmediate(
     return;
   }
 
+  const { disarmWindowOpenAlarms } = await import('./windowOpenAlarm');
+  await disarmWindowOpenAlarms(regionIds);
+
   const Notifications = require('expo-notifications') as typeof import('expo-notifications');
   await ensureGeofenceAlarmCategory();
-  const primaryRegionId = regionIds[0];
-  const t = getT();
-  const { title, body } = buildAlarmContent(regionIds, batchStartedAt);
+  const { title, body, data } = buildGeofenceAlarmContent(regionIds, batchStartedAt);
 
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -73,15 +89,7 @@ export async function fireGeofenceAlarmImmediate(
             categoryIdentifier: GEOFENCE_ALARM_CATEGORY_ID,
           }
         : {}),
-      data: {
-        type: 'geofence_enter',
-        regionId: primaryRegionId,
-        regionIds,
-        batchStartedAt,
-        eyebrow: t.spotAlarmEyebrow,
-        dismissLabel: t.dismiss,
-        viewSpotLabel: t.viewSpot,
-      },
+      data,
     },
     trigger:
       Platform.OS === 'android'

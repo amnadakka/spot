@@ -19,6 +19,7 @@ import { useLiveUserLocation } from '../hooks/useLiveUserLocation';
 import { useOccupiedSpotIds } from '../hooks/useOccupiedSpotIds';
 import { useReminderGeofencingSync } from '../hooks/useReminderGeofencingSync';
 import { useScheduledOccupiedSpotAlarms } from '../hooks/useScheduledOccupiedSpotAlarms';
+import { useWindowOpenAlarmSync } from '../hooks/useWindowOpenAlarmSync';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { cancelLegacyScheduledNotifications } from '../services/cancelLegacyScheduledNotifications';
 import { REMINDERS_CHANGED_EVENT } from '../storage/consumeDateUnlinkedReminders';
@@ -80,6 +81,7 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
   const occupiedSpotIds = useOccupiedSpotIds(reminders, liveUserLocation);
   useReminderGeofencingSync(reminders);
   useScheduledOccupiedSpotAlarms(reminders, liveUserLocation);
+  useWindowOpenAlarmSync(reminders, liveUserLocation);
 
   useEffect(() => {
     let cancelled = false;

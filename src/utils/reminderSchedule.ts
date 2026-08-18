@@ -294,6 +294,51 @@ export function isScheduleActiveNow(schedule?: ReminderSchedule, now = new Date(
   return true;
 }
 
+function atTimeOnDate(date: Date, hours: number, minutes: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, 0, 0);
+}
+
+/**
+ * Next local instant when a scheduled window opens (`timeStart` on a valid day).
+ * Null when there is no From time, or no future opening remains.
+ */
+export function nextWindowStartAt(schedule?: ReminderSchedule, now = new Date()): Date | null {
+  if (!schedule?.timeStart) {
+    return null;
+  }
+
+  const start = parseTimeString(schedule.timeStart);
+  if (!start) {
+    return null;
+  }
+
+  const todayStart = atTimeOnDate(now, start.hours, start.minutes);
+  if (todayStart.getTime() > now.getTime() && isScheduleActiveOnDate(schedule, todayStart)) {
+    return todayStart;
+  }
+
+  for (let dayOffset = 1; dayOffset <= 8; dayOffset += 1) {
+    const candidateDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+    if (!isScheduleActiveOnDate(schedule, candidateDay)) {
+      continue;
+    }
+
+    return atTimeOnDate(candidateDay, start.hours, start.minutes);
+  }
+
+  if (schedule.date) {
+    const scheduledDate = dateFromScheduleDate(schedule.date);
+    if (scheduledDate) {
+      const datedStart = atTimeOnDate(scheduledDate, start.hours, start.minutes);
+      if (datedStart.getTime() > now.getTime()) {
+        return datedStart;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function formatScheduleTimeLabel(value?: string, language?: AppLanguage): string {
   if (!value) {
     return getT(language).notSet;

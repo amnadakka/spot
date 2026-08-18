@@ -5,6 +5,7 @@
  * a 30-minute cooldown catches GPS bounce while the user stays inside.
  *
  * Schedule windows are enforced before any alarm, history, or dedup record is written.
+ * Enter while the window is closed arms an OS alarm for the next From time.
  * Metadata is hydrated from disk first so background/headless runs see the saved schedule.
  */
 import type { LocationRegion } from 'expo-location';
@@ -12,14 +13,19 @@ import { GeofencingEventType } from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
 import { fireGeofenceAlarmImmediate } from '../notifications/showGeofenceEnterNotification';
+import { armNextWindowOpenAfterTrigger, armWindowOpenAlarm, disarmWindowOpenAlarm } from '../notifications/windowOpenAlarm';
 import { setCachedLanguage } from '../i18n/translations';
 import { loadLanguage } from '../storage/preferences';
 import {
   ensureGeofenceReminderMetadataHydrated,
   getGeofenceReminderMetadataSync,
 } from '../storage/geofenceReminderTitles';
-import { consumeDateUnlinkedRemindersAfterTrigger } from '../storage/consumeDateUnlinkedReminders';
+import {
+  consumeDateUnlinkedRemindersAfterTrigger,
+  shouldAutoDeleteAfterTrigger,
+} from '../storage/consumeDateUnlinkedReminders';
 import { persistPendingGeofenceAlarm } from '../storage/pendingGeofenceAlarm';
+import { loadReminders } from '../storage/reminders';
 import { isScheduleActiveNow } from '../utils/reminderSchedule';
 import {
   clearEnterNotification,
@@ -56,6 +62,7 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
 
   if (eventType === GeofencingEventType.Exit) {
     clearEnterNotification(regionId);
+    await disarmWindowOpenAlarm(regionId);
     return;
   }
 
@@ -86,7 +93,8 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
   }
 
   if (!isScheduleActiveNow(metadata.schedule)) {
-    console.log('[Geofencing] Schedule inactive for region; skipping enter', regionId);
+    console.log('[Geofencing] Schedule inactive for region; arming window-open alarm', regionId);
+    await armWindowOpenAlarm(regionId, metadata.schedule);
     return;
   }
 
@@ -122,5 +130,15 @@ TaskManager.defineTask<GeofencingTaskEvent>(GEOFENCING_TASK_NAME, async ({ data,
     await consumeDateUnlinkedRemindersAfterTrigger([regionId]);
   } catch (e) {
     console.warn('[Geofencing] One-shot cleanup failed:', e);
+  }
+
+  try {
+    const reminders = await loadReminders();
+    const reminder = reminders.find((item) => item.id === regionId);
+    if (reminder && !shouldAutoDeleteAfterTrigger(reminder.schedule)) {
+      await armNextWindowOpenAfterTrigger(reminder);
+    }
+  } catch (e) {
+    console.warn('[Geofencing] Next window arm failed:', e);
   }
 });

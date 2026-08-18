@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { isExpoGoAndroid } from '../environment/isExpoGoAndroid';
 import { fireGeofenceAlarmImmediate } from '../notifications/showGeofenceEnterNotification';
-import { consumeDateUnlinkedRemindersAfterTrigger } from '../storage/consumeDateUnlinkedReminders';
+import { consumeDateUnlinkedRemindersAfterTrigger, shouldAutoDeleteAfterTrigger } from '../storage/consumeDateUnlinkedReminders';
 import {
   ensureEnterDedupHydrated,
   recordEnterNotification,
@@ -13,6 +13,7 @@ import { appendGeofenceEnterHistory } from '../storage/history';
 import { persistPendingGeofenceAlarm } from '../storage/pendingGeofenceAlarm';
 import type { Reminder } from '../types/reminder';
 import type { Coordinate } from '../utils/geo';
+import { armNextWindowOpenAfterTrigger } from '../notifications/windowOpenAlarm';
 
 import { useOccupiedSpotIds } from './useOccupiedSpotIds';
 
@@ -101,6 +102,19 @@ export function useScheduledOccupiedSpotAlarms(
         await consumeDateUnlinkedRemindersAfterTrigger(visit.regionIds);
       } catch (error) {
         console.warn('[ScheduledOccupiedSpot] One-shot cleanup failed:', error);
+      }
+
+      try {
+        const triggeredAtDate = new Date(triggeredAt);
+        for (const id of visit.regionIds) {
+          const reminder = remindersRef.current.find((item) => item.id === id);
+          if (!reminder || shouldAutoDeleteAfterTrigger(reminder.schedule)) {
+            continue;
+          }
+          await armNextWindowOpenAfterTrigger(reminder, triggeredAtDate);
+        }
+      } catch (error) {
+        console.warn('[ScheduledOccupiedSpot] Next window arm failed:', error);
       }
     })();
   }, [occupiedSpotIds, userLocation]);

@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <application>
     <activity
       android:name=".AlarmActivity"
@@ -12,5 +13,16 @@
     <receiver
       android:name=".AlarmDismissReceiver"
       android:exported="false" />
+    <receiver
+      android:name=".WindowOpenAlarmReceiver"
+      android:exported="false" />
+    <receiver
+      android:name=".WindowOpenBootReceiver"
+      android:enabled="true"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>

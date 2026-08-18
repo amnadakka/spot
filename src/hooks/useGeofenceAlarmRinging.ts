@@ -13,15 +13,14 @@ import {
   getActiveVisitBatchSync,
   loadVisitBatch,
 } from '../storage/geofenceVisitBatch';
-import {
-  consumeViewRegionId,
-  wasAlarmDismissedNatively,
-} from '../services/spotAlarmNative';
+import { consumeViewRegionId, consumePendingWindowOpen, wasAlarmDismissedNatively } from '../services/spotAlarmNative';
 import {
   clearPendingGeofenceAlarm,
   getPendingGeofenceAlarmSync,
   loadPendingGeofenceAlarm,
+  persistPendingGeofenceAlarm,
 } from '../storage/pendingGeofenceAlarm';
+import { completeGeofenceAlarmDelivery } from '../notifications/completeGeofenceAlarmDelivery';
 
 function getRegionIdsFromGeofenceData(data: Record<string, unknown>): string[] {
   if (Array.isArray(data.regionIds)) {
@@ -208,6 +207,12 @@ export function useGeofenceAlarmRinging(
       const alarm = resolveAlarmFromNotificationData(data);
       if (alarm) {
         startAlarm(alarm);
+        if (!wasAlarmDismissedNatively(alarm.startedAt)) {
+          void completeGeofenceAlarmDelivery(
+            alarm.spots.map((spot) => spot.regionId),
+            alarm.startedAt,
+          );
+        }
       }
     }
 
@@ -259,6 +264,16 @@ export function useGeofenceAlarmRinging(
         return;
       }
 
+      const nativePending = consumePendingWindowOpen();
+      if (
+        nativePending &&
+        nativePending.startedAt > 0 &&
+        !wasAlarmDismissedNatively(nativePending.startedAt)
+      ) {
+        await persistPendingGeofenceAlarm(nativePending.regionIds, nativePending.startedAt);
+        void completeGeofenceAlarmDelivery(nativePending.regionIds, nativePending.startedAt);
+      }
+
       const viewRegionId = consumeViewRegionId();
       const pending = getPendingGeofenceAlarmSync();
       const batch = getActiveVisitBatchSync();
@@ -307,6 +322,12 @@ export function useGeofenceAlarmRinging(
         const alarm = resolveAlarmFromNotificationData(data);
         if (alarm) {
           startAlarm(alarm);
+          if (!wasAlarmDismissedNatively(alarm.startedAt)) {
+            void completeGeofenceAlarmDelivery(
+              alarm.spots.map((spot) => spot.regionId),
+              alarm.startedAt,
+            );
+          }
           return;
         }
       }

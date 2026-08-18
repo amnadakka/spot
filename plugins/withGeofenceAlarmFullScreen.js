@@ -15,17 +15,21 @@ const DISMISS_RECEIVER = 'expo.modules.spotalarm.AlarmDismissReceiver';
 function addFullScreenIntentPermission(androidManifest) {
   AndroidConfig.Manifest.ensureToolsAvailable(androidManifest);
   const permissions = androidManifest.manifest['uses-permission'] ?? [];
-  const hasPermission = permissions.some(
-    (entry) => entry.$['android:name'] === 'android.permission.USE_FULL_SCREEN_INTENT',
-  );
+  const required = [
+    'android.permission.USE_FULL_SCREEN_INTENT',
+    'android.permission.SCHEDULE_EXACT_ALARM',
+  ];
 
-  if (!hasPermission) {
-    permissions.push({
-      $: { 'android:name': 'android.permission.USE_FULL_SCREEN_INTENT' },
-    });
-    androidManifest.manifest['uses-permission'] = permissions;
+  for (const permission of required) {
+    const hasPermission = permissions.some((entry) => entry.$['android:name'] === permission);
+    if (!hasPermission) {
+      permissions.push({
+        $: { 'android:name': permission },
+      });
+    }
   }
 
+  androidManifest.manifest['uses-permission'] = permissions;
   return androidManifest;
 }
 

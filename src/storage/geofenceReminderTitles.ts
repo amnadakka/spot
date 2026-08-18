@@ -11,6 +11,8 @@ export type GeofenceReminderMetadata = {
   title: string;
   address: string;
   description?: string;
+  latitude?: number;
+  longitude?: number;
   radiusMeters: number;
   schedule?: ReminderSchedule;
 };
@@ -75,6 +77,8 @@ export async function persistGeofenceReminderTitles(reminders: Reminder[]): Prom
         title: r.title,
         address: r.address,
         description: r.description?.trim() || undefined,
+        latitude: r.latitude,
+        longitude: r.longitude,
         radiusMeters: r.radiusMeters,
         schedule: r.schedule,
       } satisfies GeofenceReminderMetadata,
