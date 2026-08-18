@@ -88,10 +88,9 @@ export default function GeofenceAlarmRingingLayer({
             paddingTop: Math.max(insets.top, spacing.xxl),
             paddingBottom: Math.max(insets.bottom, spacing.lg),
           },
-          !isGrouped && styles.containerCentered,
         ]}
       >
-        <View style={[styles.content, !isGrouped && styles.contentCentered]}>
+        <View style={styles.headerBlock}>
           <View style={styles.header}>
             <View style={styles.iconWrap}>
               <Ionicons name="alarm" size={48} color={colors.accent} />
@@ -137,28 +136,28 @@ export default function GeofenceAlarmRingingLayer({
               ))}
             </ScrollView>
           ) : null}
+        </View>
 
-          <View style={styles.actions}>
-            {!isGrouped ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t.viewSpotDetailsA11y}
-                onPress={() => onViewSpot(alarm.spots[0].regionId)}
-                style={({ pressed }) => [styles.viewButton, pressed && styles.buttonPressed]}
-              >
-                <Text style={styles.viewLabel}>{t.viewSpot}</Text>
-              </Pressable>
-            ) : null}
-
+        <View style={styles.actions}>
+          {!isGrouped ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t.dismissAlarmA11y}
-              onPress={onDismiss}
-              style={({ pressed }) => [styles.dismissButton, pressed && styles.buttonPressed]}
+              accessibilityLabel={t.viewSpotDetailsA11y}
+              onPress={() => onViewSpot(alarm.spots[0].regionId)}
+              style={({ pressed }) => [styles.viewButton, pressed && styles.buttonPressed]}
             >
-              <Text style={styles.dismissLabel}>{t.dismiss}</Text>
+              <Text style={styles.viewLabel}>{t.viewSpot}</Text>
             </Pressable>
-          </View>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t.dismissAlarmA11y}
+            onPress={onDismiss}
+            style={({ pressed }) => [styles.dismissButton, pressed && styles.buttonPressed]}
+          >
+            <Text style={styles.dismissLabel}>{t.dismiss}</Text>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -171,22 +170,15 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.background,
     paddingHorizontal: spacing.xxl,
   },
-  containerCentered: {
-    justifyContent: 'center',
-  },
-  content: {
+  headerBlock: {
     flex: 1,
     minHeight: 0,
-    gap: spacing.lg,
-  },
-  contentCentered: {
-    flexGrow: 0,
-    flexShrink: 1,
-    width: '100%',
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
     gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
   iconWrap: {
     width: 96,
