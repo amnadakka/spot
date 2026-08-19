@@ -61,14 +61,14 @@ export default function MapPickerScreen({
   const sessionTokenRef = useRef(createPlacesSessionToken());
   const searchRequestIdRef = useRef(0);
   const coordinateRef = useRef<MapCoordinate | null>(null);
+  const searchOriginRef = useRef<MapCoordinate | null>(initialCoordinate);
+  const seedCoordinateRef = useRef(initialCoordinate);
   const [suggestionsMaxHeight, setSuggestionsMaxHeight] = useState(280);
   const suggestionsOpen = showSuggestions && suggestions.length > 0;
 
   useEffect(() => {
     coordinateRef.current = coordinate;
   }, [coordinate]);
-
-  const seedCoordinateRef = useRef(initialCoordinate);
 
   const updateAddress = useCallback(async (next: MapCoordinate) => {
     setGeocoding(true);
@@ -81,10 +81,13 @@ export default function MapPickerScreen({
   }, []);
 
   const applyCoordinate = useCallback(
-    (next: MapCoordinate, options?: { focus?: boolean }) => {
+    (next: MapCoordinate, options?: { focus?: boolean; asSearchOrigin?: boolean }) => {
       setCoordinate(next);
       setMapLoading(false);
       setAddressLabel(formatCoordinateLabel(next.latitude, next.longitude));
+      if (options?.asSearchOrigin !== false) {
+        searchOriginRef.current = next;
+      }
       if (options?.focus) {
         setMapFocusToken((token) => token + 1);
       }
@@ -111,7 +114,7 @@ export default function MapPickerScreen({
         }
 
         if (lastKnown) {
-          applyCoordinate(lastKnown);
+          applyCoordinate(lastKnown, { asSearchOrigin: true });
         }
 
         const next = await getCurrentCoordinates();
@@ -119,7 +122,7 @@ export default function MapPickerScreen({
           return;
         }
 
-        applyCoordinate(next, { focus: Boolean(lastKnown) });
+        applyCoordinate(next, { focus: Boolean(lastKnown), asSearchOrigin: true });
       } catch {
         if (cancelled || coordinateRef.current) {
           return;
@@ -146,7 +149,7 @@ export default function MapPickerScreen({
     setMapLoading(true);
     try {
       const next = await getCurrentCoordinates();
-      applyCoordinate(next, { focus: true });
+      applyCoordinate(next, { focus: true, asSearchOrigin: true });
     } catch {
       setMapLoading(false);
     }
@@ -167,13 +170,14 @@ export default function MapPickerScreen({
 
     const requestId = ++searchRequestIdRef.current;
     searchTimer.current = setTimeout(() => {
-      const bias = coordinateRef.current;
+      const origin = searchOriginRef.current ?? coordinateRef.current;
       void fetchPlaceSuggestions(text, {
         sessionToken: sessionTokenRef.current,
-        locationBias: bias
+        origin: origin ?? undefined,
+        locationBias: origin
           ? {
-              latitude: bias.latitude,
-              longitude: bias.longitude,
+              latitude: origin.latitude,
+              longitude: origin.longitude,
             }
           : undefined,
       }).then((nextSuggestions) => {

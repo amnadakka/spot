@@ -7,6 +7,7 @@ export type PlaceSuggestion = {
   placeId: string;
   label: string;
   secondaryLabel?: string;
+  distanceMeters?: number;
 };
 
 export type PlaceDetails = {
@@ -22,6 +23,7 @@ type AutocompleteResponse = {
     placePrediction?: {
       placeId?: string;
       text?: { text?: string };
+      distanceMeters?: number;
       structuredFormat?: {
         mainText?: { text?: string };
         secondaryText?: { text?: string };
@@ -29,6 +31,8 @@ type AutocompleteResponse = {
     };
   }>;
 };
+
+type LatLng = { latitude: number; longitude: number };
 
 type PlaceDetailsResponse = {
   id?: string;
@@ -56,7 +60,8 @@ export async function fetchPlaceSuggestions(
   query: string,
   options?: {
     sessionToken?: string;
-    locationBias?: { latitude: number; longitude: number; radiusMeters?: number };
+    origin?: LatLng;
+    locationBias?: LatLng & { radiusMeters?: number };
   },
 ): Promise<PlaceSuggestion[]> {
   const trimmed = query.trim();
@@ -75,6 +80,13 @@ export async function fetchPlaceSuggestions(
 
   if (options?.sessionToken) {
     body.sessionToken = options.sessionToken;
+  }
+
+  if (options?.origin) {
+    body.origin = {
+      latitude: options.origin.latitude,
+      longitude: options.origin.longitude,
+    };
   }
 
   if (options?.locationBias) {
@@ -96,7 +108,7 @@ export async function fetchPlaceSuggestions(
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask':
-          'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat',
+          'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.distanceMeters',
       },
       body: JSON.stringify(body),
     });
@@ -120,19 +132,24 @@ export async function fetchPlaceSuggestions(
         prediction.text?.text?.trim() ||
         placeId;
       const secondaryLabel = prediction.structuredFormat?.secondaryText?.text?.trim();
+      const distanceMeters =
+        typeof prediction.distanceMeters === 'number' ? prediction.distanceMeters : undefined;
 
       results.push({
         placeId,
         label,
         ...(secondaryLabel ? { secondaryLabel } : {}),
+        ...(distanceMeters != null ? { distanceMeters } : {}),
       });
-
-      if (results.length >= 5) {
-        break;
-      }
     }
 
-    return results;
+    results.sort((left, right) => {
+      const leftDistance = left.distanceMeters ?? Number.POSITIVE_INFINITY;
+      const rightDistance = right.distanceMeters ?? Number.POSITIVE_INFINITY;
+      return leftDistance - rightDistance;
+    });
+
+    return results.slice(0, 8);
   } catch {
     return [];
   }
