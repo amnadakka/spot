@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 
 import { useI18n } from '../i18n/I18nContext';
-import { getCurrentCoordinates } from '../services/getCurrentCoordinates';
+import { getCurrentCoordinates, getLastKnownCoordinates } from '../services/getCurrentCoordinates';
+import { formatCoordinateLabel } from '../services/formatCoordinateLabel';
 import {
   createPlacesSessionToken,
   fetchPlaceDetails,
@@ -31,18 +32,27 @@ export type PickedLocation = MapCoordinate & {
 
 type MapPickerScreenProps = {
   onLocationPicked: (location: PickedLocation) => void;
+  /** Show the map immediately instead of waiting for a fresh GPS fix. */
+  initialCoordinate?: MapCoordinate | null;
 };
 
-export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenProps) {
+export default function MapPickerScreen({
+  onLocationPicked,
+  initialCoordinate = null,
+}: MapPickerScreenProps) {
   const { t } = useI18n();
   const { colors } = useTheme();
   const styles = useStyles();
-  const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
-  const [addressLabel, setAddressLabel] = useState(t.loadingLocation);
+  const [coordinate, setCoordinate] = useState<MapCoordinate | null>(initialCoordinate);
+  const [addressLabel, setAddressLabel] = useState(
+    initialCoordinate
+      ? formatCoordinateLabel(initialCoordinate.latitude, initialCoordinate.longitude)
+      : t.loadingLocation,
+  );
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [mapLoading, setMapLoading] = useState(true);
+  const [mapLoading, setMapLoading] = useState(!initialCoordinate);
   const [geocoding, setGeocoding] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [resolvingPlace, setResolvingPlace] = useState(false);
@@ -58,6 +68,8 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
     coordinateRef.current = coordinate;
   }, [coordinate]);
 
+  const seedCoordinateRef = useRef(initialCoordinate);
+
   const updateAddress = useCallback(async (next: MapCoordinate) => {
     setGeocoding(true);
     try {
@@ -68,33 +80,59 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
     }
   }, []);
 
+  const applyCoordinate = useCallback(
+    (next: MapCoordinate, options?: { focus?: boolean }) => {
+      setCoordinate(next);
+      setMapLoading(false);
+      setAddressLabel(formatCoordinateLabel(next.latitude, next.longitude));
+      if (options?.focus) {
+        setMapFocusToken((token) => token + 1);
+      }
+      void updateAddress(next);
+    },
+    [updateAddress],
+  );
+
   useEffect(() => {
     let cancelled = false;
+    const seed = seedCoordinateRef.current;
+
+    if (seed) {
+      setMapLoading(false);
+      void updateAddress(seed);
+      return;
+    }
 
     (async () => {
       try {
+        const lastKnown = await getLastKnownCoordinates();
+        if (cancelled) {
+          return;
+        }
+
+        if (lastKnown) {
+          applyCoordinate(lastKnown);
+        }
+
         const next = await getCurrentCoordinates();
-        if (!cancelled) {
-          setCoordinate(next);
-          await updateAddress(next);
+        if (cancelled) {
+          return;
         }
+
+        applyCoordinate(next, { focus: Boolean(lastKnown) });
       } catch {
-        if (!cancelled) {
-          const fallback = { latitude: 40.7128, longitude: -74.006 };
-          setCoordinate(fallback);
-          await updateAddress(fallback);
+        if (cancelled || coordinateRef.current) {
+          return;
         }
-      } finally {
-        if (!cancelled) {
-          setMapLoading(false);
-        }
+
+        applyCoordinate({ latitude: 40.7128, longitude: -74.006 });
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [updateAddress]);
+  }, [applyCoordinate, updateAddress]);
 
   const handleCoordinateChange = useCallback(
     (next: MapCoordinate) => {
@@ -108,15 +146,11 @@ export default function MapPickerScreen({ onLocationPicked }: MapPickerScreenPro
     setMapLoading(true);
     try {
       const next = await getCurrentCoordinates();
-      setCoordinate(next);
-      setMapFocusToken((token) => token + 1);
-      await updateAddress(next);
+      applyCoordinate(next, { focus: true });
     } catch {
-      // Keep current map position.
-    } finally {
       setMapLoading(false);
     }
-  }, [updateAddress]);
+  }, [applyCoordinate]);
 
   const handleQueryChange = useCallback((text: string) => {
     setQuery(text);

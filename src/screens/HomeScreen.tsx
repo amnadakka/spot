@@ -557,7 +557,16 @@ const HomeScreen = forwardRef<HomeScreenHandle>(function HomeScreen(_props, ref)
 
         {screen === 'settings' ? <SettingsScreen /> : null}
 
-        {screen === 'map' && <MapPickerScreen onLocationPicked={handleLocationPicked} />}
+        {screen === 'map' && (
+          <MapPickerScreen
+            onLocationPicked={handleLocationPicked}
+            initialCoordinate={
+              pickedLocation
+                ? { latitude: pickedLocation.latitude, longitude: pickedLocation.longitude }
+                : liveUserLocation
+            }
+          />
+        )}
 
         {screen === 'form' && pickedLocation ? (
           <AddSpotForm
